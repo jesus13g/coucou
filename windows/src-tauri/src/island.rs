@@ -331,6 +331,17 @@ pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
     }
 }
 
+/// Screen pixels to leave free above the island, from `COUCOU_TOP_OFFSET`, so it
+/// can sit under a top bar that would otherwise cover it and its wake strip
+/// (Waybar, the Omarchy shell…). 0 when unset or invalid.
+fn top_offset() -> i32 {
+    std::env::var("COUCOU_TOP_OFFSET")
+        .ok()
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(0)
+}
+
 /// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
 pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let Some(win) = window(app) else { return };
@@ -344,7 +355,7 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
     let x = mp.x + (ms.width as i32 - pw as i32) / 2;
-    let y = mp.y;
+    let y = mp.y + top_offset();
 
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_position(PhysicalPosition::new(x, y));

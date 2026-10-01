@@ -112,6 +112,11 @@ on a Wayland session Coucou runs through **XWayland** automatically (it sets
 experiment; expect the island to be placed and stacked however the compositor
 decides.
 
+A top bar (Waybar, the Omarchy shell…) is drawn above the island and covers
+its wake strip, so hovering can't wake it. `COUCOU_TOP_OFFSET=<px> coucou`
+moves the island down by that many screen pixels — physical pixels under
+XWayland, i.e. the bar height times the monitor scale (24 × 1.5 = 36).
+
 ## Tray icon
 
 The tray menu (Open, Settings…, Pause, Quit) uses AppIndicator / StatusNotifier.
