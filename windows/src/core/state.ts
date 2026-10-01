@@ -83,6 +83,10 @@ export interface Settings {
   absenceInterval: number;
   activeIntegrations: string[];
   screen: "primary" | "cursor";
+  /** Out of the top edge of the screen, or under a top bar that would cover it. */
+  islandPosition: "edge" | "belowBar";
+  /** That bar's height in screen pixels; 0 = detect it. */
+  barOffset: number;
   autostart: boolean;
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
@@ -96,6 +100,8 @@ export const DEFAULT_SETTINGS: Settings = {
   absenceInterval: 180,
   activeIntegrations: ["integration_github"],
   screen: "primary",
+  islandPosition: "edge",
+  barOffset: 0,
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",

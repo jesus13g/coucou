@@ -16,6 +16,8 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
+use crate::settings::Settings;
+
 #[cfg(windows)]
 use windows::Win32::Foundation::{HWND, POINT};
 #[cfg(windows)]
@@ -331,10 +333,53 @@ pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
     }
 }
 
+/// Screen pixels to leave free above the island. Nothing at the screen edge (the
+/// default). Below a bar: the height the user typed, or else the top of the
+/// display's work area — Windows, GNOME and Plasma report their panels there —
+/// or else, on Hyprland, whose XWayland has no work area, what it reserves.
+fn top_offset(m: &Monitor, settings: &Settings) -> i32 {
+    if settings.island_position != "belowBar" {
+        return 0;
+    }
+    if settings.bar_offset > 0.0 {
+        return settings.bar_offset.round() as i32;
+    }
+    let from_work_area = m.work_area().position.y - m.position().y;
+    if from_work_area > 0 {
+        return from_work_area;
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(top) = hyprland_reserved_top(m) {
+        return top;
+    }
+    0
+}
+
+/// The top space Hyprland reserves on this display (its bars' exclusive zones),
+/// in screen pixels: Hyprland reports layout pixels, XWayland works in physical
+/// ones. Matched by output name, which XWayland shares with Hyprland.
+#[cfg(target_os = "linux")]
+fn hyprland_reserved_top(m: &Monitor) -> Option<i32> {
+    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE")?;
+    let out = std::process::Command::new("hyprctl")
+        .args(["monitors", "-j"])
+        .output()
+        .ok()?;
+    let monitors: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout).ok()?;
+    let name = m.name().map(String::as_str);
+    let hm = monitors
+        .iter()
+        .find(|h| name.is_some() && h["name"].as_str() == name)
+        .or_else(|| monitors.iter().find(|h| h["focused"].as_bool() == Some(true)))?;
+    let top = hm["reserved"].get(1)?.as_f64()?;
+    let scale = hm["scale"].as_f64().unwrap_or(1.0);
+    Some((top * scale).round() as i32)
+}
+
 /// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
-pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
+pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
     let Some(win) = window(app) else { return };
-    let Some(m) = target_monitor(app, pref) else { return };
+    let Some(m) = target_monitor(app, &settings.screen) else { return };
 
     let scale = m.scale_factor();
     let mp = *m.position();
@@ -344,7 +389,7 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
     let x = mp.x + (ms.width as i32 - pw as i32) / 2;
-    let y = mp.y;
+    let y = mp.y + top_offset(&m, settings);
 
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_position(PhysicalPosition::new(x, y));

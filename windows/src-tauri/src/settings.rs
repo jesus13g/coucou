@@ -16,12 +16,23 @@ pub struct Settings {
     pub active_integrations: Vec<String>,
     /// "primary" = the main display, "cursor" = whichever display the mouse is on.
     pub screen: String,
+    /// "edge" = the island comes out of the top edge of the screen, "belowBar" =
+    /// it sits under a top bar or panel that would otherwise cover it.
+    #[serde(default = "default_island_position")]
+    pub island_position: String,
+    /// Height of that bar in screen pixels when "belowBar"; 0 = detect it.
+    #[serde(default)]
+    pub bar_offset: f64,
     pub autostart: bool,
     pub hooks_installed: bool,
     /// Claude model used by the chat. Changeable in the settings window.
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+}
+
+fn default_island_position() -> String {
+    "edge".into()
 }
 
 fn default_model() -> String {
@@ -37,6 +48,8 @@ impl Default for Settings {
             absence_interval: 180.0,
             active_integrations: vec!["integration_github".into()],
             screen: "primary".into(),
+            island_position: default_island_position(),
+            bar_offset: 0.0,
             autostart: false,
             hooks_installed: false,
             model: default_model(),

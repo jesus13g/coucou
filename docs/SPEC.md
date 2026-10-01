@@ -8,6 +8,7 @@ Toutes les mesures sont en pixels logiques. Les valeurs viennent de `design/prot
 
 - Une fenêtre Tauri sans bordure, fond transparent, sans ombre, toujours au premier plan, hors de la barre des tâches et d'Alt-Tab. Elle ne prend jamais le focus au clic (Windows : `WS_EX_NOACTIVATE` + `WS_EX_TOOLWINDOW` ; Linux : fenêtre GTK de type utilitaire, `accept-focus` désactivé).
 - Taille fixe 720 × 320, ancrée en haut au centre de l'écran choisi (principal, ou celui sous la souris). L'island est dessinée dedans, collée au bord haut.
+- Position (réglages) : par défaut l'island sort du bord haut de l'écran. « Below the top bar » la descend sous une barre ou un panneau du haut qui la couvrirait : hauteur saisie en pixels d'écran, ou détectée (0) — haut de la zone de travail de l'écran (Windows, GNOME, Plasma), sinon l'espace réservé par Hyprland.
 - **Clics traversants** : la zone transparente ne doit jamais bloquer les clics. Le passage des clics est basculé à 60 Hz selon que le curseur est dans la forme de l'island (plus 14 px de marge) ou pas.
 - La fenêtre peut prendre le focus uniquement quand un champ texte de l'island a le focus (chat, prompt). Sinon elle ne vole jamais le focus.
 - Dimensions de base : `wN = 184`, `hN = 32` (valeurs du prototype).

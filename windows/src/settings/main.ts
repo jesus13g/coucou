@@ -382,6 +382,35 @@ function generalSection(): HTMLElement {
     void save();
   });
 
+  const position = h("select", {}) as HTMLSelectElement;
+  position.append(
+    h("option", { value: "edge", text: "Top edge of the screen" }),
+    h("option", { value: "belowBar", text: "Below the top bar" }),
+  );
+  position.value = settings.islandPosition;
+
+  const barOffset = h("input", {
+    type: "number", min: "0", max: "200", step: "1",
+    value: String(Math.round(settings.barOffset)),
+    style: "width:72px",
+  }) as HTMLInputElement;
+  barOffset.addEventListener("change", () => {
+    settings.barOffset = Math.max(0, Math.min(200, Math.round(Number(barOffset.value) || 0)));
+    barOffset.value = String(settings.barOffset);
+    void save();
+  });
+  const barRow = h("div", { class: "row" },
+    h("label", { text: "Bar height" }),
+    barOffset,
+    h("span", { class: "hint", text: "screen pixels, 0 = detect" }),
+  );
+  barRow.style.display = settings.islandPosition === "belowBar" ? "" : "none";
+  position.addEventListener("change", () => {
+    settings.islandPosition = position.value as Settings["islandPosition"];
+    barRow.style.display = settings.islandPosition === "belowBar" ? "" : "none";
+    void save();
+  });
+
   return h(
     "section",
     {},
@@ -400,6 +429,11 @@ function generalSection(): HTMLElement {
       h("label", { text: "Island lives on" }),
       screen,
     ),
+    h("div", { class: "row" },
+      h("label", { text: "Island position" }),
+      position,
+    ),
+    barRow,
     h("div", { class: "row" },
       h("label", { text: "Launch at startup" }),
       toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),

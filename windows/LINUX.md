@@ -112,6 +112,13 @@ on a Wayland session Coucou runs through **XWayland** automatically (it sets
 experiment; expect the island to be placed and stacked however the compositor
 decides.
 
+A top bar (Waybar, the Omarchy shell…) is drawn above the island and covers
+its wake strip, so hovering can't wake it. **Settings → General → Island
+position → Below the top bar** moves the island under it. Bar height `0`
+detects it — from the work area, or from what Hyprland reserves on that
+display; otherwise type it in screen pixels (bar height × scale, e.g.
+24 × 1.5 = 36).
+
 ## Tray icon
 
 The tray menu (Open, Settings…, Pause, Quit) uses AppIndicator / StatusNotifier.
