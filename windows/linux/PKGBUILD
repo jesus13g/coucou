@@ -1,0 +1,81 @@
+# Maintainer: Coucou contributors
+#
+# Builds Coucou for Linux from git, the way an AUR *-git package does:
+#   cd windows/linux && makepkg -si
+#
+# To build the commit you have checked out instead of the remote default branch,
+# point the source at your clone:
+#   COUCOU_REPO="git+file://$(git rev-parse --show-toplevel)#branch=$(git branch --show-current)" makepkg -si
+
+pkgname=coucou-git
+pkgver=0.1.1
+pkgrel=1
+pkgdesc="Mochi lives at the top of your screen: Claude Code sessions, approvals, chat and integrations"
+arch=('x86_64' 'aarch64')
+url="https://github.com/jesus13g/coucou"
+license=('MIT')
+depends=(
+  'webkit2gtk-4.1'
+  'gtk3'
+  'libayatana-appindicator'
+  'libx11'
+  'dbus'
+  'gst-plugins-base'
+  'gst-plugins-good'
+  'xdg-utils'
+)
+makedepends=('git' 'cargo' 'nodejs' 'npm')
+optdepends=(
+  'gnome-keyring: stores API keys (any Secret Service provider works: KWallet, KeePassXC…)'
+  'xorg-xwayland: needed on Wayland sessions, Coucou runs through XWayland'
+)
+provides=('coucou')
+conflicts=('coucou')
+options=('!lto' '!debug')
+source=("coucou::${COUCOU_REPO:-git+https://github.com/jesus13g/coucou.git}")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd coucou
+  local base
+  base=$(sed -n 's/^version = "\(.*\)"/\1/p' windows/Cargo.toml | head -1)
+  printf "%s.r%s.g%s" "$base" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+  cd coucou/windows
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+  npm ci --no-audit --no-fund
+}
+
+build() {
+  cd coucou/windows
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  # `tauri build` runs `npm run build` first, whose prebuild step compiles the
+  # coucou-hook relay; the app embeds the front end and the sounds.
+  npx tauri build --no-bundle
+}
+
+check() {
+  cd coucou/windows
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --release
+}
+
+package() {
+  cd coucou/windows
+  install -Dm755 target/release/coucou "$pkgdir/usr/bin/coucou"
+  # Tauri's resource directory for /usr/bin/coucou is /usr/lib/Coucou; the app
+  # copies the relay from here to ~/.local/share/coucou/bin on every launch.
+  install -Dm755 target/release/coucou-hook "$pkgdir/usr/lib/Coucou/coucou-hook"
+
+  install -Dm644 linux/coucou.desktop "$pkgdir/usr/share/applications/coucou.desktop"
+  install -Dm644 src-tauri/icons/32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/coucou.png"
+  install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/coucou.png"
+  install -Dm644 src-tauri/icons/128x128@2x.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/coucou.png"
+
+  install -Dm644 ../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 ../LICENSE-ASSETS.md "$pkgdir/usr/share/licenses/$pkgname/LICENSE-ASSETS.md"
+}

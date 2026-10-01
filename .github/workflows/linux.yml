@@ -1,0 +1,74 @@
+name: Linux
+
+# Builds and tests the Linux app (same Tauri sources as the Windows one, in
+# windows/), and attaches the .deb, .rpm and .AppImage to the run.
+# Runs on changes to the Tauri app, on tags like `linux-v0.1.1`, or by hand.
+
+on:
+  push:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/linux.yml'
+    tags:
+      - 'linux-v*'
+  pull_request:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/linux.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libssl-dev libdbus-1-dev libx11-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            windows/target
+          key: linux-cargo-${{ hashFiles('windows/Cargo.lock') }}
+          restore-keys: linux-cargo-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check the front end
+        run: npx tsc --noEmit
+
+      - name: Rust tests
+        run: |
+          cargo build --release --locked -p coucou-hook
+          mkdir -p dist
+          cargo test --locked
+
+      - name: Build the bundles
+        run: npm run pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coucou-linux
+          path: windows/release/Coucou-Linux-*
+          if-no-files-found: error

@@ -1,4 +1,5 @@
-// Dropped files are copied into %LOCALAPPDATA%\Coucou\inbox so the original is
+// Dropped files are copied into the inbox (%LOCALAPPDATA%\Coucou\inbox on
+// Windows, ~/.local/share/coucou/inbox on Linux) so the original is
 // never touched and the copy survives the drag source going away.
 // The inbox is swept of anything older than a week, as on macOS.
 
@@ -52,7 +53,7 @@ pub fn ingest(source: &str) -> Result<DroppedFile, String> {
     }
 
     std::fs::copy(src, &dest).map_err(|e| format!("cannot copy: {e}"))?;
-    // CopyFileEx carries the source's timestamps across, so a file last edited
+    // CopyFileEx (Windows) carries the source's timestamps across, so a file last edited
     // three years ago would arrive already older than the sweep window and be
     // deleted on the spot. The inbox ages from when *we* copied it.
     if let Ok(file) = std::fs::File::options().write(true).open(&dest) {

@@ -117,6 +117,11 @@ The app icon and the tray icon are drawn in code, like Mochi itself:
 npm run icons          # regenerates src-tauri/icons from scripts/gen-icons.mjs
 ```
 
+### Linux
+
+The same sources build for Linux — see [`LINUX.md`](LINUX.md) for Arch
+packaging, Wayland notes and the tray/keyring setup.
+
 ### Layout
 
 ```
@@ -126,9 +131,10 @@ windows/
     island/            state machine, hooks, integrations
     views/             every island view
     settings/          the settings window
-  src-tauri/           Rust backend: window, named pipe, Claude API, pollers
-  hook/                coucou-hook.exe, the Claude Code relay
-  scripts/             icon generator
+  src-tauri/           Rust backend: window, named pipe / Unix socket, Claude API, pollers
+  hook/                coucou-hook(.exe), the Claude Code relay
+  linux/               PKGBUILD and desktop entry for Arch Linux
+  scripts/             icon generator, bundle packer
 ```
 
 ### Log

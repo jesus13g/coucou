@@ -160,7 +160,7 @@ function starPath(x: CanvasRenderingContext2D, ro: number, ri: number) {
   x.closePath();
 }
 
-const FONT = `system-ui, "Segoe UI Variable Text", "Segoe UI", sans-serif`;
+const FONT = `system-ui, "Segoe UI Variable Text", "Segoe UI", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans", sans-serif`;
 
 // ── Engine ────────────────────────────────────────────────────────────────────
 

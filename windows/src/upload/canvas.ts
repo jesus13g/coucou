@@ -11,7 +11,7 @@ import {
   type UploadEyeShape, type UploadFrame,
 } from "./sequence";
 
-const FONT = 'system-ui, "Segoe UI Variable Text", "Segoe UI", sans-serif';
+const FONT = 'system-ui, "Segoe UI Variable Text", "Segoe UI", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans", sans-serif';
 
 /** Mirrors the reference `rr()`: a rounded rect, radius clamped to the box. */
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -490,7 +490,7 @@ function drawEye(ctx: CanvasRenderingContext2D, shape: UploadEyeShape, w: number
 
 /**
  * The generic sheet with a folded corner. macOS swaps in the real file icon from
- * NSWorkspace; Windows has no equivalent reachable from the webview, so this is
+ * NSWorkspace; Windows and Linux have no equivalent reachable from the webview, so this is
  * the shape in every case — it is the same fallback the Swift draws.
  */
 function drawDoc(ctx: CanvasRenderingContext2D, cx: number, cy: number, wsc: number, hsc: number) {

@@ -1,6 +1,7 @@
-// Coucou for Windows — app wiring and the commands the island calls.
+// Coucou for Windows and Linux — app wiring and the commands the island calls.
 
 mod claude;
+mod clock;
 mod files;
 mod hooks;
 mod integrations;
@@ -10,8 +11,10 @@ mod pipe;
 mod secrets;
 mod settings;
 mod tray;
+#[cfg(windows)]
 mod win_user;
 
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::sync::atomic::Ordering;
@@ -29,7 +32,29 @@ use pipe::Pending;
 use settings::Settings;
 
 /// Keeps spawned helpers from flashing a console window.
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Spawns a helper without a console window (Windows) and without holding on to
+/// it: the child is reaped by a throwaway thread so no zombie is left behind on
+/// Linux. Returns whether it started.
+fn spawn_detached(mut cmd: Command) -> bool {
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    #[cfg(unix)]
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    match cmd.spawn() {
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            true
+        }
+        Err(_) => false,
+    }
+}
 
 pub struct Shared {
     pub settings: Mutex<Settings>,
@@ -126,38 +151,79 @@ fn open_url(url: String) {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return;
     }
-    let _ = Command::new("rundll32.exe")
-        .args(["url.dll,FileProtocolHandler", &url])
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
+    #[cfg(windows)]
+    let cmd = {
+        let mut cmd = Command::new("rundll32.exe");
+        cmd.args(["url.dll,FileProtocolHandler", &url]);
+        cmd
+    };
+    // xdg-open hands the URL to the desktop's default browser.
+    #[cfg(not(windows))]
+    let cmd = {
+        let mut cmd = Command::new("xdg-open");
+        cmd.arg(&url);
+        cmd
+    };
+    spawn_detached(cmd);
 }
 
+/// Editors tried for "Open terminal", in order. On Linux the same editor goes by
+/// several names depending on the build: `code` (Microsoft's), `code-oss` (Code -
+/// OSS), `codium` (VSCodium), `cursor`.
+#[cfg(windows)]
+const EDITORS: &[&str] = &["code"];
+#[cfg(not(windows))]
+const EDITORS: &[&str] = &["code", "code-oss", "codium", "cursor"];
+
 /// "Open terminal" opens the working folder in VS Code when `code` is on PATH,
-/// and falls back to Explorer otherwise.
+/// and falls back to the file manager otherwise.
 #[tauri::command]
 fn open_in_vscode(path: Option<String>) -> bool {
-    // No `cmd /C` anywhere near this. The path is a project folder chosen by
-    // whoever is using Claude Code, and cmd would happily read `&`, `^` and `%`
-    // in a folder name as syntax. Finding the launcher ourselves and handing the
-    // path over as a separate argument keeps it a path.
-    if let Some(code) = find_on_path("code") {
-        let mut cmd = Command::new(code);
-        if let Some(p) = path.as_deref().filter(|p| !p.is_empty()) {
-            cmd.arg(p);
-        }
-        if cmd.creation_flags(CREATE_NO_WINDOW).spawn().is_ok() {
-            return true;
+    // No `cmd /C` (or `sh -c`) anywhere near this. The path is a project folder
+    // chosen by whoever is using Claude Code, and a shell would happily read
+    // `&`, `^`, `%` or `$` in a folder name as syntax. Finding the launcher
+    // ourselves and handing the path over as a separate argument keeps it a path.
+    let folder = path.as_deref().filter(|p| !p.is_empty());
+    for editor in EDITORS {
+        if let Some(code) = find_on_path(editor) {
+            let mut cmd = Command::new(code);
+            if let Some(p) = folder {
+                cmd.arg(p);
+            }
+            if spawn_detached(cmd) {
+                return true;
+            }
         }
     }
-    if let Some(p) = path.as_deref().filter(|p| !p.is_empty()) {
-        let _ = Command::new("explorer").arg(p).spawn();
+    if let Some(p) = folder {
+        #[cfg(windows)]
+        let mut cmd = Command::new("explorer");
+        #[cfg(not(windows))]
+        let mut cmd = Command::new("xdg-open");
+        cmd.arg(p);
+        spawn_detached(cmd);
     }
     false
+}
+
+/// Our own `which`: walks $PATH for an executable file, no shell involved.
+#[cfg(not(windows))]
+fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    let dirs = std::env::var_os("PATH")?;
+    std::env::split_paths(&dirs)
+        .map(|dir| dir.join(stem))
+        .find(|c| {
+            std::fs::metadata(c)
+                .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
+        })
 }
 
 /// Our own `where`: walks %PATH% against %PATHEXT%, no shell involved.
 /// Rust quotes arguments correctly for `.cmd`/`.bat` targets since 1.77, so
 /// spawning `code.cmd` directly is safe.
+#[cfg(windows)]
 fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
     let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
     let dirs = std::env::var_os("PATH")?;
@@ -279,7 +345,7 @@ fn secret_clear(key: String) -> Result<(), String> {
     secrets::clear(&key)
 }
 
-/// Opens the configured n8n instance — the URL lives in the Credential Manager.
+/// Opens the configured n8n instance — the URL lives in the OS key store.
 #[tauri::command]
 fn open_n8n() {
     if let Some(url) = secrets::get("n8n-url") {
@@ -306,6 +372,7 @@ fn log_line(message: String) {
 /// for the *same* arguments as the island (see `additionalBrowserArgs` in
 /// tauri.conf.json) — a mismatch makes the second window come up blank, with no
 /// error anywhere.
+#[cfg(windows)]
 const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
 
 /// In a dev build the pages are served by Vite, so the second window needs the
@@ -326,8 +393,10 @@ fn settings_page_url(app: &AppHandle) -> WebviewUrl {
 /// one that exists before the island's webview does.
 fn create_settings_window(app: &AppHandle) {
     let url = settings_page_url(app);
-    match WebviewWindowBuilder::new(app, "settings", url)
-        .additional_browser_args(BROWSER_ARGS)
+    let builder = WebviewWindowBuilder::new(app, "settings", url);
+    #[cfg(windows)]
+    let builder = builder.additional_browser_args(BROWSER_ARGS);
+    match builder
         .title("Settings — Coucou")
         .inner_size(560.0, 680.0)
         .min_inner_size(460.0, 480.0)
@@ -366,6 +435,9 @@ fn open_settings_window(app: AppHandle) {
 }
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    island::prepare_linux_environment();
+
     let loaded = settings::load();
     let gate = Arc::new(PollGate::new());
 
@@ -415,7 +487,12 @@ pub fn run() {
             create_settings_window(&handle);
 
             if let Some(win) = island::window(&handle) {
+                // GTK only honours the window type while the window is unmapped.
+                #[cfg(target_os = "linux")]
+                let _ = win.hide();
                 island::make_non_activating(&win);
+                #[cfg(target_os = "linux")]
+                island::track_pointer_leave(&win, gate.clone());
                 island::apply_geometry(&handle, &loaded.screen, false);
                 let _ = win.show();
             }
