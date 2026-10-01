@@ -1,4 +1,4 @@
-// SVG paths standing in for the SF Symbols used by the macOS island.
+// SVG paths for the island's icons.
 // Drawn on a 24×24 grid so they read at the same optical size.
 
 export const ICONS = {

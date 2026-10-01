@@ -1,14 +1,13 @@
-// Drop zone, upload progress and the "what do you want to do with it" card —
-// ports of UploadView / UploadingView / ChooseView from IslandViewContent.swift.
+// Drop zone, upload progress and the "what do you want to do with it" card.
 //
-// Sending a file by email is not in the Windows v1, so `choose` offers the one
+// Sending a file by email is not in this version, so `choose` offers the one
 // action the spec asks for: ask a question about it.
 
 import { h, clear } from "./dom";
 import { State } from "../core/state";
 import type { ViewActions, ViewHost } from "./views";
 
-/** Dashed rounded rect drawn as SVG so the dashes can march like on macOS. */
+/** Dashed rounded rect drawn as SVG so the dashes can march. */
 function dashedFrame(): SVGSVGElement {
   const ns = "http://www.w3.org/2000/svg";
   const el = document.createElementNS(ns, "svg");

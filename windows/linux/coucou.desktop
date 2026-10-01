@@ -7,6 +7,6 @@ Exec=coucou
 Icon=coucou
 Terminal=false
 Categories=Development;Utility;
-Keywords=claude;ai;notch;island;
+Keywords=claude;ai;island;
 StartupNotify=false
 StartupWMClass=coucou

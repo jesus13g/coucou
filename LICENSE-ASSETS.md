@@ -6,9 +6,9 @@ The [MIT License](LICENSE) covers the **source code** of Coucou. It does **not**
 
 - the names **“Coucou”** and **“Mochi”**;
 - the **Mochi character** — its design, look, expressions and animations as a character;
-- the **app icon** and **menu bar icon** (`NotchBuddy/Assets.xcassets/`);
-- the **sounds** (`NotchBuddy/Resources/sounds/`);
-- the **images, GIFs and videos** in `docs/media/` and `design/`.
+- the **app icon** and **tray icon** (`windows/src-tauri/icons/`);
+- the **sounds** (`windows/sounds/`);
+- the **images, GIFs and videos** in `docs/media/`, `windows/screenshots/` and `design/`.
 
 ## What you can do
 
@@ -18,7 +18,7 @@ The [MIT License](LICENSE) covers the **source code** of Coucou. It does **not**
 
 ## What you can't do without written permission
 
-- Publish or distribute an app, a fork or a derivative work under the name “Coucou” or “Mochi”, or with the Coucou icon, the Mochi character or the Coucou sounds — on the App Store, on GitHub releases, or anywhere else.
+- Publish or distribute an app, a fork or a derivative work under the name “Coucou” or “Mochi”, or with the Coucou icon, the Mochi character or the Coucou sounds — on an app store, on GitHub releases, or anywhere else.
 - Use any of these assets commercially, or in a way that suggests your project is Coucou or is made or endorsed by its author.
 
 If you fork Coucou to ship your own app, that's welcome under the MIT License: just give it **your own name, icon, character and sounds**.

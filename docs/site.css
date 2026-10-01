@@ -1,7 +1,7 @@
 :root{--bg:#0e0f12;--card:#16171b;--ink:#f3f4f6;--dim:#a1a6b0;--line:#26282e;--accent:#8ab4ff}
 @media (prefers-color-scheme: light){:root{--bg:#fafafa;--card:#fff;--ink:#16171b;--dim:#5f646d;--line:#e6e7ea;--accent:#2f6fe0}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,"Inter","Segoe UI","Cantarell","Noto Sans",sans-serif}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .wrap{max-width:760px;margin:0 auto;padding:32px 20px 80px}
 header{display:flex;align-items:center;gap:12px;margin-bottom:36px;flex-wrap:wrap}

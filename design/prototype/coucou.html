@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Notch Buddy · prototype visuel</title>
+<title>Coucou · prototype visuel</title>
 <style>
 :root{
   box-sizing:border-box;
@@ -11,7 +11,7 @@
   padding-bottom:env(safe-area-inset-bottom,0px);
   --desk:#E2E4E8; --ink:#16171B; --muted:#5F646D; --panel:#FFFFFF; --line:#D1D4DA; --chip:#EDEFF2; --focus:#2F6BFF;
   --spr:cubic-bezier(.32,1.22,.42,1);
-  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",system-ui,sans-serif;
+  --font:system-ui,"Inter","Segoe UI","Cantarell",sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){--desk:#131417; --ink:#ECEDEF; --muted:#9A9FA8; --panel:#1E2024; --line:#32353B; --chip:#2A2D32;}
@@ -34,7 +34,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-
 .stage-wrap{max-width:1180px;margin:0 auto;padding:0 24px;position:relative}
 .stage-outer{position:relative;width:100%}
 .stage{position:absolute;left:0;top:0;width:1120px;height:700px;transform-origin:0 0}
-.mac{position:absolute;inset:0;background:#050506;border-radius:28px;padding:12px;box-shadow:0 30px 60px -30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4)}
+.device{position:absolute;inset:0;background:#050506;border-radius:28px;padding:12px;box-shadow:0 30px 60px -30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4)}
 .screen{position:relative;width:100%;height:100%;border-radius:14px;overflow:hidden;background:
   radial-gradient(1200px 520px at 18% 118%, #22324F 0%, transparent 60%),
   radial-gradient(900px 500px at 92% -10%, #33224A 0%, transparent 55%),
@@ -231,15 +231,15 @@ code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12px;backgroun
 <body>
 <header class="top">
   <div class="grow">
-    <h1>Notch Buddy</h1>
-    <p>Prototype visuel du compagnon de notch, à valider avant la version Swift. Tout est codé, rien n'est une vidéo.</p>
+    <h1>Coucou</h1>
+    <p>Prototype visuel de Coucou, la référence visuelle de l'app. Tout est codé, rien n'est une vidéo.</p>
   </div>
   <button class="demo-btn" id="demoBtn"><svg viewBox="0 0 12 12"><path d="M2 1.2v9.6L10.4 6z" fill="currentColor"/></svg><span>Lancer la démo</span></button>
 </header>
-<p class="how"><b>À tester à la main :</b> survole le notch, clique trois fois sur le bonhomme, glisse un fichier du Finder vers le notch, attrape le bonhomme et lâche-le sur Safari. Active le son en bas.</p>
+<p class="how"><b>À tester à la main :</b> survole le notch, clique trois fois sur le bonhomme, glisse un fichier depuis le gestionnaire de fichiers vers le notch, attrape le bonhomme et lâche-le sur Safari. Active le son en bas.</p>
 
 <div class="stage-wrap"><div class="stage-outer" id="stageOuter">
-<div class="stage" id="stage"><div class="mac"><div class="screen" id="screen">
+<div class="stage" id="stage"><div class="device"><div class="screen" id="screen">
   <div class="curve"></div><div class="curve2"></div>
   <div class="menubar">
     <div class="l"><svg viewBox="0 0 16 16"><path d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6C4.3 4.8 3 5.6 2.4 6.9c-1.3 2.2-.3 5.5.9 7.3.6.9 1.3 1.9 2.2 1.8.9 0 1.2-.6 2.3-.6s1.4.6 2.3.6c1 0 1.6-.9 2.1-1.8.7-1 .9-1.9 1-2-.1 0-1.9-.7-1.9-2.7zM9.5 3.8c.5-.6.8-1.4.7-2.2-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2.1.8.1 1.5-.4 2-1z"/></svg><b>Finder</b><span>Fichier</span><span>Édition</span><span>Présentation</span></div>
@@ -644,7 +644,7 @@ class Bot{
       if(this.badge==='dots'&&!this.mini){ const w=R*.74,h=R*.42; x.fillStyle='#000'; rr(x,-w/2-R*.07,-h/2-R*.07,w+R*.14,h+R*.14,(h+R*.14)/2); x.fill(); x.fillStyle=bcol; rr(x,-w/2,-h/2,w,h,h/2); x.fill();
         const tt=NOW()/1000; for(let i=0;i<3;i++){ const ph=((tt*2.4-i*.22)%1+1)%1; const r=R*.06*(1+.4*Math.max(0,Math.sin(ph*Math.PI*2))); x.fillStyle='rgba(255,255,255,.95)'; x.beginPath(); x.arc((i-1)*R*.19,0,r,0,Math.PI*2); x.fill() } }
       else if(this.badge==='bang'||this.badge==='q'){ x.fillStyle='#000'; x.beginPath(); x.arc(0,0,R*.3,0,Math.PI*2); x.fill(); x.fillStyle=bcol; x.beginPath(); x.arc(0,0,R*.23,0,Math.PI*2); x.fill();
-        if(!this.mini){ x.fillStyle='#fff'; x.font=`800 ${R*.32}px -apple-system,system-ui,sans-serif`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(this.badge==='bang'?'!':'?',0,R*.02) } }
+        if(!this.mini){ x.fillStyle='#fff'; x.font=`800 ${R*.32}px system-ui,sans-serif`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(this.badge==='bang'?'!':'?',0,R*.02) } }
       else { x.fillStyle='#000'; x.beginPath(); x.arc(0,0,R*.2,0,Math.PI*2); x.fill(); x.fillStyle=bcol; x.beginPath(); x.arc(0,0,R*.135,0,Math.PI*2); x.fill() }
       x.restore() }
     // particules
@@ -654,7 +654,7 @@ class Bot{
       else if(p.type==='star'){ x.fillStyle='#F7B32B'; x.rotate(p.rot+p.age*2); star(x,sz,sz*.45); x.fill() }
       else if(p.type==='spark'){ x.fillStyle='#fff'; x.rotate(p.rot); star(x,sz*.8,sz*.18); x.fill() }
       else if(p.type==='sweat'){ x.fillStyle='#7CC7FF'; x.beginPath(); x.moveTo(0,-sz); x.quadraticCurveTo(sz*.8,sz*.2,0,sz*.6); x.quadraticCurveTo(-sz*.8,sz*.2,0,-sz); x.fill() }
-      else if(p.type==='z'){ x.fillStyle='rgba(210,220,235,1)'; x.font=`700 ${sz*1.9}px -apple-system,system-ui,sans-serif`; x.fillText('z',0,0) }
+      else if(p.type==='z'){ x.fillStyle='rgba(210,220,235,1)'; x.font=`700 ${sz*1.9}px system-ui,sans-serif`; x.fillText('z',0,0) }
       x.restore() }
   }
   eye(shape,w,h,open,sd,P){ const x=this.x, t=NOW()/1000;

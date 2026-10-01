@@ -1,8 +1,6 @@
 // Claude Code hook events → island state.
-// Port of HookServer.processEvent / processPermissionRequest from the macOS app.
-// Difference from macOS: no terminal filter. On Windows and Linux the hook fires
-// from any terminal (Windows Terminal, VS Code, PowerShell, Konsole, kitty…) and
-// all of them are handled.
+// No terminal filter: the hook fires from any terminal (Windows Terminal,
+// VS Code, PowerShell, Konsole, kitty…) and all of them are handled.
 
 import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
@@ -26,11 +24,7 @@ interface HookPayload {
   tool_input?: Record<string, unknown>;
 }
 
-const PROJECT_ALIASES: Record<string, string> = {
-  "notch-buddy": "Notch Buddy",
-  notchbuddy: "Notch Buddy",
-  notch_buddy: "Notch Buddy",
-};
+const PROJECT_ALIASES: Record<string, string> = {};
 
 function aliasProjectName(name: string): string {
   return PROJECT_ALIASES[name.toLowerCase()] ?? name;
@@ -42,7 +36,7 @@ function lastPathComponent(p: string): string {
   return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
 }
 
-/** frenchStep() — same labels as the macOS app. */
+/** frenchStep() — the step labels shown in the ticker. */
 const TOOL_LABELS: Record<string, string> = {
   Bash: "Exécute",
   Read: "Lit",

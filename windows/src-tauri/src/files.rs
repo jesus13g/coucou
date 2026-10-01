@@ -1,7 +1,7 @@
 // Dropped files are copied into the inbox (%LOCALAPPDATA%\Coucou\inbox on
 // Windows, ~/.local/share/coucou/inbox on Linux) so the original is
 // never touched and the copy survives the drag source going away.
-// The inbox is swept of anything older than a week, as on macOS.
+// The inbox is swept of anything older than a week.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};

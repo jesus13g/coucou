@@ -1,9 +1,9 @@
-// The upload canvas — port of UploadCanvasView.swift.
+// The upload canvas.
 //
 // While the sequence engine is active this canvas draws the whole island body:
 // card, dashed drop frame, drop text, progress bar, the choose card, Mochi and
 // the file being sucked in. The island's own Mochi is hidden for the duration,
-// exactly as on macOS, because this canvas draws its own.
+// because this canvas draws its own.
 
 import { State } from "../core/state";
 import {
@@ -52,7 +52,7 @@ function text(
   ctx.font = font;
   ctx.fillStyle = color;
   ctx.textAlign = align;
-  // SwiftUI's .leading / .center / .trailing anchors are vertically centred.
+  // .leading / .center / .trailing anchors are vertically centred.
   ctx.textBaseline = "middle";
   ctx.fillText(s, x, y);
 }
@@ -100,7 +100,7 @@ export class UploadCanvas {
     this.ctx = this.canvas.getContext("2d");
   }
 
-  /** `wallTime` in seconds drives the marching dashes, like the macOS timeline. */
+  /** `wallTime` in seconds drives the marching dashes. */
   draw(f: UploadFrame, wallTime: number) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     if (this.sizedFor !== dpr) {
@@ -178,7 +178,6 @@ export class UploadCanvas {
 
     let cx = USC.TEXT_X;
     for (const chip of ["PDF", "Images", "Code", "Docs"]) {
-      // The macOS port measures chips the same rough way, so the row lines up.
       const w = chip.length * 6.5 + 16;
       ctx.fillStyle = "rgba(255,255,255,0.07)";
       rr(ctx, cx, USC.TEXT_Y + 9, w, 18, 9);
@@ -489,9 +488,8 @@ function drawEye(ctx: CanvasRenderingContext2D, shape: UploadEyeShape, w: number
 // ── Document icon ───────────────────────────────────────────────────────────
 
 /**
- * The generic sheet with a folded corner. macOS swaps in the real file icon from
- * NSWorkspace; Windows and Linux have no equivalent reachable from the webview, so this is
- * the shape in every case — it is the same fallback the Swift draws.
+ * The generic sheet with a folded corner. The real file icon is not reachable
+ * from the webview, so this is the shape in every case.
  */
 function drawDoc(ctx: CanvasRenderingContext2D, cx: number, cy: number, wsc: number, hsc: number) {
   const w = 34 * wsc;

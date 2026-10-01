@@ -1,9 +1,9 @@
 // Integration pollers — the Rust side of StripePoller / GithubPoller /
 // VercelPoller / N8nPoller / ResendPoller / NotionPoller / CalcomPoller.
 //
-// Same endpoints, same first-run delays and intervals as the Swift pollers. Each
+// Fixed endpoints, first-run delays and intervals. Each
 // one emits an `integration` event; the island owns the badge, the sound and the
-// 60 s auto-clear, exactly as the Swift handlers do.
+// 60 s auto-clear.
 //
 // Nothing is polled until its key exists in the Credential Manager, and no
 // request goes anywhere the user has not configured.
@@ -60,7 +60,7 @@ pub fn set_paused(on: bool) {
     PAUSED.store(on, Ordering::Relaxed);
 }
 
-/// Spawns every poller with the macOS delays and intervals.
+/// Spawns every poller with its delay and interval.
 pub fn start(app: AppHandle) {
     spawn(app.clone(), "integration_n8n", 3, 15, poll_n8n);
     spawn(app.clone(), "integration_vercel", 5, 30, poll_vercel);
@@ -129,7 +129,7 @@ fn is_new(key: &'static str, id: &str) -> bool {
     let mut map = SEEN.0.lock().unwrap();
     match map.insert(key, id.to_string()) {
         Some(previous) => previous != id,
-        None => false, // first poll: populate silently, like the Swift pollers
+        None => false, // first poll: populate silently
     }
 }
 
@@ -614,7 +614,7 @@ async fn poll_n8n(app: AppHandle) {
     let base = raw_base.trim_end_matches('/').to_string();
     let http = client();
 
-    // Same two shapes as the Swift poller: the public API first, then /rest.
+    // Two shapes: the public API first, then /rest.
     let list_urls = [
         format!("{base}/api/v1/executions?limit=1&includeData=false"),
         format!("{base}/rest/executions?limit=1&includeData=false"),

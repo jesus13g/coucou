@@ -1,4 +1,4 @@
-// Claude API client — the same integration as ClaudeService.swift: multi-turn
+// Claude API client: multi-turn
 // chat with web search, and files sent as document/image/text blocks.
 //
 // Everything happens here rather than in the island: the API key never leaves
@@ -17,7 +17,7 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// a fallback model inside the same call, so the island never shows a dead end.
 const FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
 const MAX_TOKENS: u32 = 4096;
-/// Text and code files are inlined; anything larger is skipped, as on macOS.
+/// Text and code files are inlined; anything larger is skipped.
 const MAX_INLINE_TEXT: u64 = 200_000;
 
 pub const DEFAULT_MODEL: &str = "claude-opus-5";
@@ -193,7 +193,6 @@ async fn call(key: &str, body: &Value) -> Result<Value, String> {
 }
 
 /// PDF → document block, image → image block, text/code → inline text.
-/// Mirrors readFileAsBlock() in ClaudeService.swift.
 fn file_block(path: &str) -> Option<Value> {
     let ext = std::path::Path::new(path)
         .extension()

@@ -1,5 +1,4 @@
-// Chat view — DOM port of PromptView / ChatBubble / TypingDotsView from
-// IslandViewContent.swift.
+// Chat view — prompt, chat bubbles and typing dots.
 
 import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";

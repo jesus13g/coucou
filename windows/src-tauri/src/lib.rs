@@ -445,6 +445,8 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             let _ = app.emit_to(island::WINDOW_LABEL, "tray", "open".to_string());
         }))
+        // The plugin's API asks for a launcher kind on every platform; it is only
+        // used there, and Windows/Linux ignore it.
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(Shared {
             settings: Mutex::new(loaded.clone()),

@@ -1,4 +1,4 @@
-// Overview task ticker — port of TickerView (V2) from IslandViewContent.swift.
+// Overview task ticker.
 //
 // Three rows: completed (A), current → completed (B), incoming (C). Every row
 // position is recomputed from a single clock in `tick()`, driven by the island's
@@ -58,7 +58,7 @@ function setText(row: Row, text: string) {
 
 /**
  * Places a row. `phase` 0 = current (shimmering, full size), 1 = completed
- * (dim, shifted up-left and scaled down) — same crossfades as the Swift view.
+ * (dim, shifted up-left and scaled down).
  */
 function place(row: Row, y: number, phase: number, opacity: number) {
   const scale = 1 - phase * (1 - COMPLETED_SCALE);
@@ -138,7 +138,7 @@ export class Ticker {
     const p = clamp((nowMs - this.startMs) / DURATION, 0, 1);
     const e = EASE(p);
 
-    // A leaves upwards and fades a little faster than it moves, as on macOS.
+    // A leaves upwards and fades a little faster than it moves.
     place(this.a, lerp(0, -ROW_H, e), 1, clamp(1 - p * 1.35, 0, 1));
     place(this.b, lerp(ROW_H, 0, e), e, 1);
     place(this.c, lerp(ROW_H * 2, ROW_H, e), 0, e);

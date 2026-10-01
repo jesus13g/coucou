@@ -1,7 +1,7 @@
 // Easing + spring helpers.
-// Ease.* mirrors BotEngine.swift `enum Ease` (itself the prototype's `E`).
-// Spring mirrors SwiftUI `.spring(response:dampingFraction:)` so open/close motion
-// matches the macOS app exactly.
+// Ease.* mirrors the prototype's `E` easing set.
+// Spring is a damped spring (response, dampingFraction) so open/close motion
+// matches the prototype.
 
 export const Ease = {
   out: (t: number) => 1 - Math.pow(1 - t, 3),
@@ -43,7 +43,7 @@ export function cubicBezier(x1: number, y1: number, x2: number, y2: number): Eas
 export const closeCurve = cubicBezier(0.45, 0, 0.2, 1);
 
 /**
- * SwiftUI-equivalent spring: ω₀ = 2π / response, ζ = dampingFraction.
+ * Damped spring: ω₀ = 2π / response, ζ = dampingFraction.
  * Integrated per frame (sub-stepped) so a dropped frame never destabilises it.
  */
 export class Spring {

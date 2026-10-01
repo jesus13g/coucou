@@ -66,7 +66,7 @@ npm run pack           # .deb / .rpm / .AppImage in windows/release/
 
 **Tray icon → Settings… → Claude Code → Install hooks…** shows the exact diff of
 what will change in `~/.claude/settings.json`, the dated backup it will take,
-and writes nothing until you click. Same rules as on macOS and Windows: your own
+and writes nothing until you click. Same rules as on Windows: your own
 hooks are never touched, uninstall removes only Coucou's entries.
 
 The relay, `coucou-hook`, is copied to `~/.local/share/coucou/bin/` at launch
@@ -145,9 +145,9 @@ Plasma, Hyprland/sway bars (waybar `tray` module) and most panels show it. On
   of its panel. It still works; hover just below the bar to wake Mochi.
 - Anything else: `~/.local/share/coucou/coucou.log`.
 
-## What's different from the Mac version
+## Limitations
 
-The same list as Windows (no notch, approval from any terminal, no email
-sending, no window-attach), plus: the cursor is read through X11, so on Wayland
+The same list as Windows (approval from any terminal, no email sending, no
+window-attach), plus: the cursor is read through X11, so on Wayland
 the island only reacts once the pointer is over it or over another XWayland
 window — which is all hover and click need.

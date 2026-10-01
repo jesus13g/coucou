@@ -1,8 +1,8 @@
-// The launch "coucou" — port of GreetingCanvasView.swift.
-// Everything is laid out in the same 640×150 reference space as on macOS.
+// The launch "coucou".
+// Everything is laid out in a 640×150 reference space.
 
 import { Sound } from "../core/sound";
-import { COMPACT_W, NOTCH_H, NOTCH_W } from "../core/layout";
+import { BASE_H, BASE_W, COMPACT_W } from "../core/layout";
 
 // ── Timing (mirrors greeting-v2.html `T`) ─────────────────────────────────────
 
@@ -42,7 +42,7 @@ const EAR_HB = 17;
 const CARD = { x: 10, y: 36, w: 620, h: 104 };
 const CARD_R = 20;
 const SMALL_W = COMPACT_W;
-const SMALL_H = NOTCH_H;
+const SMALL_H = BASE_H;
 
 // ── Easing ────────────────────────────────────────────────────────────────────
 
@@ -78,8 +78,8 @@ interface Pose {
 function greetPose(t: number): Pose {
   const gx = seg(t, 0, 0.5);
   const g = Math.sin((Math.PI * gx) / 2) + 0.04 * Math.sin(Math.PI * gx) * gx;
-  const iw = lerp(NOTCH_W, 640, g);
-  const ih = lerp(NOTCH_H, 150, g);
+  const iw = lerp(BASE_W, 640, g);
+  const ih = lerp(BASE_H, 150, g);
 
   const gg = E.back(seg(t, 0.02, T.grow));
   const hb = lerp(3, HB, gg);
@@ -203,7 +203,7 @@ function pose(t: number, tc: number): Pose {
   return p;
 }
 
-// ── Particles (seeded LCG, seed = 7, identical sequence to the Swift version) ──
+// ── Particles (seeded LCG, seed = 7, so the sequence is always the same) ──
 
 interface RingDot { a: number; j: number; s: number; al: number }
 interface Ring { t0: number; dots: RingDot[] }
