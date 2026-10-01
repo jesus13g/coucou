@@ -33,7 +33,7 @@ Meet **Mochi**: a soft little squircle with big eyes that pops out of the top of
 - ✅ **Approve from the island** — Claude Code permission requests show up with **Allow / Deny**. One click, back to work. Works from any terminal.
 - 💬 **Ask Claude anything** — built-in chat, straight from the island.
 - 📎 **Drop a file on the island** — Mochi turns into a box and swallows it, then ask a question about it.
-- 🔌 **Integrations** — Stripe payments, n8n workflows, GitHub, Vercel deployments, Resend emails, Notion, Cal.com. Each one gets its own little colored Mochi.
+- 🔌 **Integrations** — GitHub, Notion, Cal.com. Each one gets its own little colored Mochi.
 - 🎭 **A real character** — idle breathing, blinks, eyes on a sphere that follow your mouse, emotes, 28 handcrafted sounds, a greeting on launch.
 - 🫥 **Invisible when idle** — retracts into the top edge of the screen when nothing is running, peeks out when you hover it.
 - 🔒 **Private by design** — no telemetry, no account. Keys live in the Windows Credential Manager or the Linux Secret Service. The app only talks to the services you plug in.
@@ -102,7 +102,7 @@ Click the Coucou icon in the system tray → **Settings…**
 |---|---|---|
 | **Claude Code hooks** | live sessions and approvals | **Install hooks** — Coucou backs up `~/.claude/settings.json`, merges its hooks and shows you the diff before writing anything |
 | **Anthropic API key** | chat and questions about files | Windows Credential Manager / Linux Secret Service |
-| Stripe, n8n, GitHub, Vercel, Resend, Notion, Cal.com | the integration pills | Windows Credential Manager / Linux Secret Service, all optional |
+| GitHub, Notion, Cal.com | the integration pills | Windows Credential Manager / Linux Secret Service, all optional |
 
 If Coucou isn't running, the hook exits immediately: **Claude Code is never blocked.**
 

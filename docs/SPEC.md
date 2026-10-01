@@ -68,7 +68,7 @@ rouge `rgba(244,80,94,.55)`, vert `rgba(52,211,153,.5)`, rose `rgba(244,114,182,
 | `empty` | 150 | 70, 62 | « Rien ne tourne pour l'instant. » + bouton « Demander à Claude » | 16 |
 | `approval` | 206 | 62, 56 | agent + « Claude Code veut lancer une commande », bloc code, Refuser (N), Toujours autoriser, Autoriser (Y) | 04 |
 | `question` | 196 | 62, 56 | agent + question + options en boutons | 05 |
-| `error` | 190 | 62, 58 | agent + outil, titre, détail en rouge `#FF8D97`, Relancer, Ouvrir dans n8n | 06 |
+| `error` | 190 | 62, 58 | agent + outil, titre, détail en rouge `#FF8D97`, Relancer, Voir le terminal | 06 |
 | `finished` | 170 | 62, 58 | agent + résumé, Voir le terminal, OK | 07 |
 | `confused` | 160 | 76, 66 | « Trop de claques d'un coup. » | 08 |
 | `upload` | 176 | 140, 62 | zone pointillée, « Dépose tes fichiers ici », étiquettes | 09 |
@@ -78,7 +78,7 @@ rouge `rgba(244,80,94,.55)`, vert `rgba(52,211,153,.5)`, rose `rgba(244,114,182,
 | `prompt` | 156 | 52, 44 | pastille de contexte + champ + micro + envoyer | 13 |
 | `searching` | 156 | 52, 44 | contexte + texte scintillant « Claude lit la page et cherche sur le web… » | 14 |
 | `result` | 262 (s'adapte au contenu, max 320) | 52, 44 | titre, 3 lignes de résultat, boutons | 15 |
-| `note` | 136 | 60, 50 | message court (mail envoyé, copié, j'ouvre n8n…), se ferme seul après 2 s | — |
+| `note` | 136 | 60, 50 | message court (mail envoyé, copié…), se ferme seul après 2 s | — |
 
 Centre vertical du bonhomme : 36 + (hauteur − 46) / 2, sauf `result` (y = 86).
 
@@ -86,7 +86,7 @@ Centre vertical du bonhomme : 36 + (hauteur − 46) / 2, sauf `result` (y = 86).
 - Position x = 112 dans la carte, fenêtre de 96 pt avec masque dégradé haut/bas, 4 lignes de 30 pt (précédente, courante, suivante, suivante+1).
 - Ligne courante : 14 pt medium, texte scintillant (dégradé gris → blanc → gris qui balaie en 2,2 s). Autres : 13 pt `#5F646D`, icône 14 pt.
 - Toutes les 2,8 s, si la tâche en focus travaille : tout monte de 30 pt en 450 ms `cubic-bezier(.3,.9,.3,1)`.
-- Dans l'app réelle, les lignes = les dernières actions de la session (outil + cible : « Edit invoice.ts », « Bash npm test ») ou les nœuds n8n.
+- Dans l'app réelle, les lignes = les dernières actions de la session (outil + cible : « Edit invoice.ts », « Bash npm test »).
 
 ### Pastilles (overview)
 - 132 × 34, rayon 17, fond couleur de l'agent à 13 %, bord à 32 %, mini-bonhomme Ø 24 centré à 17 pt du bord gauche, libellé 12 pt couleur de l'agent éclaircie de 25 %. Deux colonnes, écart 8, centrées verticalement dans la carte droite (qui commence à x = 342).
@@ -100,12 +100,12 @@ Centre vertical du bonhomme : 36 + (hauteur − 46) / 2, sauf `result` (y = 86).
 |---|---|
 | Korus | `#FF6B5B` |
 | SBE Hub | `#2DD4A7` |
-| Morning AI Brief (n8n) | `#F7B32B` |
-| Publication IG (n8n) | `#A78BFA` |
+| Morning AI Brief | `#F7B32B` |
+| Publication IG | `#A78BFA` |
 | louisraille.fr | `#38BDF8` |
 | Autres | prendre dans cet ordre : `#F472B6`, `#34D399`, `#FB923C`, `#60A5FA`, `#E879F9`, puis boucler |
 
-Nom d'une session Claude Code = nom du dossier de travail (`cwd`), avec une table d'alias réglable (ex. `sbe-hub` → « SBE Hub »). Nom d'un workflow n8n = nom du workflow.
+Nom d'une session Claude Code = nom du dossier de travail (`cwd`), avec une table d'alias réglable (ex. `sbe-hub` → « SBE Hub »).
 
 ## 7. Le personnage : Mochi
 
@@ -186,8 +186,7 @@ Pas de son pour les mises à jour silencieuses (défilé de tâches, mini-bonhom
 Icône dans la zone de notification (Windows) ou la barre d'état (Linux, AppIndicator). Menu : Ouvrir Coucou, Réglages…, Pause, Quitter.
 
 Fenêtre Réglages (simple) :
-- Clé API Anthropic (magasin de clés du système), modèle (par défaut voir INTEGRATIONS §5).
-- n8n : URL de l'instance, clé API (magasin de clés du système), intervalle de polling, workflows suivis (tous par défaut).
+- Clé API Anthropic (magasin de clés du système), modèle (par défaut voir INTEGRATIONS §4).
 - Claude Code : état des hooks (installés / non), bouton Installer / Désinstaller, délai d'attente d'une décision (défaut 110 s).
 - Son on/off, volume. Fermeture auto (défaut 60 s). Délai d'absence (défaut 3 min).
 - Lancer au démarrage (plugin autostart de Tauri).
