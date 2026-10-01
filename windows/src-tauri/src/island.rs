@@ -11,7 +11,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
@@ -48,6 +48,11 @@ pub const WINDOW_LABEL: &str = "island";
 /// Margin around the island that still counts as "on the island", in logical px.
 /// Generous because a click must never be swallowed.
 const HIT_MARGIN: f64 = 14.0;
+/// Room left under the island when the window is fitted to it, for Mochi's
+/// particles and glow, in logical px.
+const FIT_PAD_BOTTOM: f64 = 24.0;
+/// How long the island has to hold still before the window shrinks around it.
+const FIT_SETTLE: Duration = Duration::from_millis(250);
 
 #[derive(Serialize, Clone)]
 pub struct CursorPayload {
@@ -88,6 +93,12 @@ pub struct PollGate {
     /// Wayland window, so "still exactly there" means "gone".
     #[cfg(target_os = "linux")]
     left_at: Mutex<Option<(f64, f64)>>,
+    /// The compositor routes the mouse by window rectangle, ignoring the input
+    /// shape click-through relies on, so the window itself has to hug the island.
+    pub fit_to_island: bool,
+    /// Logical size the window was last given.
+    window_size: Mutex<(f64, f64)>,
+    rect_changed_at: Mutex<Instant>,
 }
 
 impl PollGate {
@@ -100,11 +111,23 @@ impl PollGate {
             ignoring: AtomicBool::new(false),
             #[cfg(target_os = "linux")]
             left_at: Mutex::new(None),
+            fit_to_island: compositor_ignores_input_shape(),
+            window_size: Mutex::new((PANEL_W, PANEL_H)),
+            rect_changed_at: Mutex::new(Instant::now()),
         }
     }
 
     pub fn set_rect(&self, rect: IslandRect) {
         *self.rect.lock().unwrap() = rect;
+        *self.rect_changed_at.lock().unwrap() = Instant::now();
+    }
+
+    /// The window size that just holds the island, its hit margin and the wake strip.
+    fn fitted_size(&self) -> (f64, f64) {
+        let r = *self.rect.lock().unwrap();
+        let w = (r.w + 2.0 * HIT_MARGIN).max(STRIP_W).min(PANEL_W).ceil();
+        let h = (r.y + r.h + FIT_PAD_BOTTOM).max(STRIP_H).min(PANEL_H).ceil();
+        (w, h)
     }
 
     /// Forces the next poll tick to re-apply the flag (after a window resize).
@@ -128,6 +151,18 @@ impl PollGate {
     fn is_active(&self) -> bool {
         *self.active.lock().unwrap()
     }
+}
+
+/// Hyprland's XWayland support ignores X11 input shapes, so a click-through
+/// window still swallows every click over its whole rectangle.
+#[cfg(target_os = "linux")]
+fn compositor_ignores_input_shape() -> bool {
+    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some_and(|v| !v.is_empty())
+}
+
+#[cfg(windows)]
+fn compositor_ignores_input_shape() -> bool {
+    false
 }
 
 pub fn window(app: &AppHandle) -> Option<WebviewWindow> {
@@ -378,6 +413,45 @@ fn hyprland_reserved_top(m: &Monitor) -> Option<i32> {
 
 /// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
 pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
+    let size = if collapsed { (STRIP_W, STRIP_H) } else { (PANEL_W, PANEL_H) };
+    place(app, settings, size);
+}
+
+/// Hyprland only: grows the window back to the full panel the moment the island
+/// outgrows it, so an opening island is never cut off. The cursor poll shrinks it
+/// again once the island settles.
+pub fn grow_for_island(app: &AppHandle, gate: &PollGate, settings: &Settings) {
+    if !gate.fit_to_island || gate.collapsed.load(Ordering::Relaxed) {
+        return;
+    }
+    let (fw, fh) = gate.fitted_size();
+    let (cw, ch) = *gate.window_size.lock().unwrap();
+    if fw > cw + 0.5 || fh > ch + 0.5 {
+        place(app, settings, (PANEL_W, PANEL_H));
+    }
+}
+
+/// Hyprland only: shrinks the window around an island that has stopped moving.
+fn shrink_to_island(app: &AppHandle, gate: &PollGate) {
+    if !gate.fit_to_island || gate.collapsed.load(Ordering::Relaxed) {
+        return;
+    }
+    if gate.rect_changed_at.lock().unwrap().elapsed() < FIT_SETTLE {
+        return;
+    }
+    let fitted = gate.fitted_size();
+    let (cw, ch) = *gate.window_size.lock().unwrap();
+    if (fitted.0 - cw).abs() < 0.5 && (fitted.1 - ch).abs() < 0.5 {
+        return;
+    }
+    let Some(shared) = app.try_state::<crate::Shared>() else { return };
+    let settings = shared.settings.lock().unwrap().clone();
+    place(app, &settings, fitted);
+}
+
+/// Sizes the window (logical px) and centres it at the top of the island's display.
+/// The island is drawn centred in the window, so it stays put whatever the size.
+fn place(app: &AppHandle, settings: &Settings, (lw, lh): (f64, f64)) {
     let Some(win) = window(app) else { return };
     let Some(m) = target_monitor(app, &settings.screen) else { return };
 
@@ -385,17 +459,38 @@ pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
     let mp = *m.position();
     let ms = *m.size();
 
-    let (lw, lh) = if collapsed { (STRIP_W, STRIP_H) } else { (PANEL_W, PANEL_H) };
+    if let Some(shared) = app.try_state::<crate::Shared>() {
+        *shared.gate.window_size.lock().unwrap() = (lw, lh);
+    }
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
     let x = mp.x + (ms.width as i32 - pw as i32) / 2;
     let y = mp.y + top_offset(&m, settings);
 
+    #[cfg(target_os = "linux")]
+    set_gtk_size_request(&win, pw, ph);
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_position(PhysicalPosition::new(x, y));
     // Moving across displays can rescale the window: re-assert the physical size.
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
+}
+
+/// A fixed-size GTK window is pinned to its size request, not to what `resize`
+/// asks for, and without one GTK falls back to 200×200 as the smallest it may be —
+/// which turned the 6 px wake strip into an invisible 200 px block that ate clicks.
+#[cfg(target_os = "linux")]
+fn set_gtk_size_request(win: &WebviewWindow, pw: u32, ph: u32) {
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let w = ((pw as f64 / scale).round() as i32).max(1);
+    let h = ((ph as f64 / scale).round() as i32).max(1);
+    let target = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        if let Ok(gw) = target.gtk_window() {
+            gw.set_size_request(w, h);
+        }
+    });
 }
 
 #[cfg(windows)]
@@ -558,16 +653,22 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                     }
                 }
 
+                shrink_to_island(&app, &gate);
+
                 let Some(win) = window(&app) else { continue };
                 let Ok(origin) = win.outer_position() else { continue };
                 let scale = win.scale_factor().unwrap_or(1.0);
                 let Some((cx, cy)) = cursor_for_poll(&gate) else { continue };
-                let x = (cx - origin.x as f64) / scale;
-                let y = (cy - origin.y as f64) / scale;
                 let size = match win.inner_size() {
                     Ok(s) => (s.width as f64 / scale, s.height as f64 / scale),
                     Err(_) => (PANEL_W, PANEL_H),
                 };
+                // Everything below works in panel coordinates (the full 720×320
+                // window), whatever size the window has been fitted to. The window
+                // is always centred on the panel and shares its top edge.
+                let offset = (PANEL_W - size.0) / 2.0;
+                let x = (cx - origin.x as f64) / scale + offset;
+                let y = (cy - origin.y as f64) / scale;
                 if (x - last.0).abs() < 1.0 && (y - last.1).abs() < 1.0 {
                     continue;
                 }
@@ -599,8 +700,8 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                 was_down = down;
 
                 let dragging = down
-                    && x >= 0.0
-                    && x <= size.0
+                    && x >= offset
+                    && x <= offset + size.0
                     && y >= 0.0
                     && y <= size.1;
 

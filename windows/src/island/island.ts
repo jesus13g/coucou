@@ -30,6 +30,12 @@ const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading"
 /** Seconds between the drop and the moment the progress bar starts filling. */
 const PRE_PROGRESS = USC.T_PROG_START - USC.T_DROP;
 
+/**
+ * Page x to panel x. The window is not always the full panel — on Hyprland it is
+ * shrunk around the island — but it is always centred on it.
+ */
+const panelX = (x: number) => x + (PANEL_W - window.innerWidth) / 2;
+
 const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
 
 export class Island {
@@ -534,7 +540,7 @@ export class Island {
         this.fsm.click();
         return;
       }
-      if (this.isBotHit(e.clientX, e.clientY)) {
+      if (this.isBotHit(panelX(e.clientX), e.clientY)) {
         this.cancelBotHover();
         this.engine.slap();
       }
@@ -550,7 +556,7 @@ export class Island {
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.
     if (!IS_TAURI) {
-      window.addEventListener("mousemove", (e) => this.onCursor(e.clientX, e.clientY));
+      window.addEventListener("mousemove", (e) => this.onCursor(panelX(e.clientX), e.clientY));
     }
   }
 
