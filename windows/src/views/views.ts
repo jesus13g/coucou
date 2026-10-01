@@ -1,6 +1,5 @@
-// Island views — DOM ports of IslandViewContent.swift. Paddings, font sizes,
-// colours and wording are copied from the Swift views so both platforms read
-// identically.
+// Island views — paddings, font sizes, colours and wording follow the
+// prototype in design/.
 
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";

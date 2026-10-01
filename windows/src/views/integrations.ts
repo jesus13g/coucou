@@ -1,15 +1,13 @@
-// Integration cards shown in the overview's left card — DOM ports of
-// IntegrationCardView and friends from IslandViewContent.swift.
+// Integration cards shown in the overview's left card.
 //
-// Cal.com is the one simplification: macOS shows a three-level calendar
-// (month → day → booking); here it is the list of upcoming bookings.
+// Cal.com shows the list of upcoming bookings.
 
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { State, type AgentTask } from "../core/state";
 import { Bridge } from "../core/bridge";
 
-/** Same shape as the Swift `timeAgo` computed properties. */
+/** "x min ago"-style relative times. */
 export function timeAgo(value: unknown): string {
   const date = typeof value === "number" ? new Date(value) : new Date(String(value));
   const diff = (Date.now() - date.getTime()) / 1000;
@@ -57,8 +55,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const info = State.integrations[task.id];
   const configured = info?.configured ?? false;
   const error = info?.error ?? null;
-  // The Claude Code pill is about hooks, not a key — the macOS wording would be
-  // misleading here.
+  // The Claude Code pill is about hooks, not a key.
   const missing = task.id === "integration_claude" ? "Hooks not installed" : "Key not configured";
   const label = error ?? (configured ? "Connected · loading…" : missing);
   const statusColor = error || !configured ? "#F4505E" : "#22C55E";

@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Notch Buddy · séquence de dépôt (référence)</title>
+<title>Coucou · séquence de dépôt (référence)</title>
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
   --bg:#E2E4E8;--ink:#16171B;--muted:#5F646D;--panel:#fff;--line:#D1D4DA;--chip:#EDEFF2}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#131417;--ink:#ECEDEF;--muted:#9A9FA8;--panel:#1E2024;--line:#32353B;--chip:#2A2D32}}
 :root[data-theme="dark"]{--bg:#131417;--ink:#ECEDEF;--muted:#9A9FA8;--panel:#1E2024;--line:#32353B;--chip:#2A2D32}
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,"Inter","Segoe UI","Cantarell",sans-serif}
 .wrap{max-width:1000px;margin:0 auto;padding:26px 20px 40px}
 h1{margin:0;font-size:24px;letter-spacing:-.02em}
 p{margin:6px 0 16px;color:var(--muted);font-size:14px;line-height:1.45;max-width:70ch}
@@ -224,8 +224,8 @@ function drawDoc(cx,cy,wsc,hsc,alpha,top,hh){ // icône de document générique 
 }
 function drawCursor(c,down){ X.save(); X.translate(c.x,c.y); if(down) X.scale(.88,.88); X.fillStyle='#fff'; X.strokeStyle='#000'; X.lineWidth=1.1; X.lineJoin='round';
   X.beginPath(); X.moveTo(0,0); X.lineTo(0,16); X.lineTo(4,12.4); X.lineTo(7,19); X.lineTo(9.6,17.8); X.lineTo(6.7,11.4); X.lineTo(11.6,11.4); X.closePath(); X.fill(); X.stroke(); X.restore() }
-function text(s,x,y,size,weight,color,align='left'){ X.font=`${weight} ${size}px -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif`; X.fillStyle=color; X.textAlign=align; X.textBaseline='middle'; X.fillText(s,x,y) }
-function chip(s,x,y){ X.font='500 11px -apple-system,system-ui,sans-serif'; const w=X.measureText(s).width+16; X.fillStyle='rgba(255,255,255,.07)'; rr(X,x,y-9,w,18,9); X.fill(); text(s,x+8,y,11,500,'#B9BDC4'); return w+6 }
+function text(s,x,y,size,weight,color,align='left'){ X.font=`${weight} ${size}px system-ui,"Segoe UI","Cantarell",sans-serif`; X.fillStyle=color; X.textAlign=align; X.textBaseline='middle'; X.fillText(s,x,y) }
+function chip(s,x,y){ X.font='500 11px system-ui,sans-serif'; const w=X.measureText(s).width+16; X.fillStyle='rgba(255,255,255,.07)'; rr(X,x,y-9,w,18,9); X.fill(); text(s,x+8,y,11,500,'#B9BDC4'); return w+6 }
 function draw(t){
   simulateTo(t); const f=frame(t);
   X.setTransform(K,0,0,K,0,0); X.clearRect(0,0,W,H);

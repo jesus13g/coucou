@@ -4,7 +4,7 @@
 
 # Coucou for Windows
 
-**Mochi doesn't get a notch on a PC — so it lives at the top of your screen instead.**
+**Mochi lives at the top of your screen.**
 
 Approve Claude Code permissions, watch your session work, drop a file, chat with Claude, keep an eye on your services — without leaving what you're doing.
 
@@ -107,15 +107,19 @@ Installing is optional — `target/release/coucou.exe` runs on its own. There is
 window in the taskbar and no console: the island at the top of the screen and the
 Mochi in the notification area are the whole app, and Quit lives in its menu.
 
-The 28 sounds are the macOS app's own files; they are never duplicated in this
-folder. The path is declared once, in `SOUNDS_DIR` at the top of
-`vite.config.ts` — when they move to `shared/sounds/`, change that one line.
+The 28 sounds live in `sounds/`. The path is declared once, in `SOUNDS_DIR` at
+the top of `vite.config.ts`.
 
 The app icon and the tray icon are drawn in code, like Mochi itself:
 
 ```powershell
 npm run icons          # regenerates src-tauri/icons from scripts/gen-icons.mjs
 ```
+
+### Linux
+
+The same sources build for Linux — see [`LINUX.md`](LINUX.md) for Arch
+packaging, Wayland notes and the tray/keyring setup.
 
 ### Layout
 
@@ -126,9 +130,11 @@ windows/
     island/            state machine, hooks, integrations
     views/             every island view
     settings/          the settings window
-  src-tauri/           Rust backend: window, named pipe, Claude API, pollers
-  hook/                coucou-hook.exe, the Claude Code relay
-  scripts/             icon generator
+  src-tauri/           Rust backend: window, named pipe / Unix socket, Claude API, pollers
+  hook/                coucou-hook(.exe), the Claude Code relay
+  linux/               PKGBUILD and desktop entry for Arch Linux
+  sounds/              the 28 WAV sounds
+  scripts/             icon generator, bundle packer
 ```
 
 ### Log
@@ -136,13 +142,12 @@ windows/
 `%LOCALAPPDATA%\Coucou\coucou.log` — hook events, permission decisions, poller
 problems. It stays on your machine.
 
-## What's different from the Mac version
+## Limitations
 
-- No notch, so the island lives at the top centre of the screen and retracts into
-  the top edge instead of hiding in a notch.
-- Permission approval works from **any** terminal; the Mac build only listens to
-  VS Code sessions.
+- The island lives at the top centre of the screen and retracts into the top edge
+  when hidden.
+- Permission approval works from **any** terminal.
 - Not in this version: sending a file by email, dragging Mochi onto a window to
   attach it as context, and jumping to a specific terminal window — "Open
   terminal" opens the working folder in VS Code when `code` is on your `PATH`.
-- Cal.com shows the next bookings as a list rather than the Mac's calendar.
+- Cal.com shows the next bookings as a list.

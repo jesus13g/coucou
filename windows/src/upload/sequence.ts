@@ -1,12 +1,10 @@
-// The drop choreography — port of UploadSequenceEngine.swift, itself a port of
-// design/prototype/upload-sequence.html.
+// The drop choreography — a port of design/animations/upload-sequence.html.
 //
 // The engine is pure arithmetic: it owns no DOM and draws nothing. It takes the
 // cursor and a drop time, and hands `frame()` back everything the canvas needs
-// for one frame. All coordinates are island points (the island is 640 × 176),
-// so every constant below is the macOS constant unchanged.
+// for one frame. All coordinates are island points (the island is 640 × 176).
 
-/** Constants — exact mirror of USC in UploadSequenceEngine.swift. */
+/** Constants of the drop choreography. */
 export const USC = {
   W: 640,
   ISL_H: 176,

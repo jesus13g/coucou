@@ -1,8 +1,7 @@
-// Mochi — direct port of NotchBuddy/Sources/App/BotEngine.swift to Canvas 2D.
-// Same constants, same tweens, same easings, same particles. The only intentional
-// difference is the `happy`/`wink` eye arc, which follows the prototype
-// (design/prototype/notch-buddy.html, the visual source of truth) — the Swift
-// arc angles produce a different shape.
+// Mochi — the character engine, in Canvas 2D.
+// Constants, tweens, easings and particles follow the prototype
+// (design/prototype/coucou.html, the visual source of truth), including the
+// `happy`/`wink` eye arc.
 
 import { Ease, lerp, type EaseFn } from "../core/anim";
 import { Sound } from "../core/sound";
@@ -160,7 +159,7 @@ function starPath(x: CanvasRenderingContext2D, ro: number, ri: number) {
   x.closePath();
 }
 
-const FONT = `system-ui, "Segoe UI Variable Text", "Segoe UI", sans-serif`;
+const FONT = `system-ui, "Segoe UI Variable Text", "Segoe UI", "Cantarell", "Noto Sans", "Ubuntu", "DejaVu Sans", sans-serif`;
 
 // ── Engine ────────────────────────────────────────────────────────────────────
 

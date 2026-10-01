@@ -1,10 +1,10 @@
 // The island: DOM shell, sizing animation, Mochi placement, mouse handling.
-// Mirrors IslandRootView.swift + IslandWindowController.swift.
+// The island root: mode, view and window coordination.
 
 import { Tracked, Spring, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, onDragDrop } from "../core/bridge";
 import {
-  EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
+  EXPANDED_CORNER, EXPANDED_W, BASE_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
   islandSize,
   type IslandMode, type IslandViewName,
@@ -51,7 +51,7 @@ export class Island {
   private views!: Map<IslandViewName, ViewHost>;
   private uploadCanvas!: UploadCanvas;
 
-  private width = new Tracked(NOTCH_W);
+  private width = new Tracked(BASE_W);
   private height = new Tracked(0);
   private radius = new Tracked(ROUNDED_CORNER);
   private botCx = new Spring(46);
@@ -115,7 +115,7 @@ export class Island {
         const cwd = State.focusTask?.sessionCwd ?? null;
         void Bridge.openInVSCode(cwd);
       },
-      // The ↗ button — same targets as openAgentTarget() on macOS.
+      // The ↗ button — opens the agent's target.
       openTarget: () => {
         const task = State.focusTask;
         if (!task) return;
@@ -183,7 +183,7 @@ export class Island {
     this.contentEl = h("div", { id: "content" }, this.header.el, this.viewsEl);
 
     // The drop sequence draws the card, the bar and its own Mochi. It sits under
-    // the header, which stays visible on top of it exactly as on macOS.
+    // the header, which stays visible on top of it.
     this.uploadCanvas = new UploadCanvas({
       ask: () => {
         State.promptContext = State.droppedFile
@@ -283,7 +283,7 @@ export class Island {
     return State.mode === "expanded" && UploadSeq.isActive && UPLOAD_VIEWS.has(State.view);
   }
 
-  /** Navigating out of the drop flow ends the sequence, as on macOS. */
+  /** Navigating out of the drop flow ends the sequence. */
   private stopSequenceIfLeaving(view: IslandViewName) {
     if (UploadSeq.isActive && !UPLOAD_VIEWS.has(view)) UploadSeq.deactivate();
   }
@@ -382,7 +382,7 @@ export class Island {
   /**
    * Mochi eats the file. Nothing here waits on the file system: the copy into
    * the inbox runs in the background and swaps the path in when it lands, so a
-   * slow disk can never stall the animation — same as FileDropHandler on macOS.
+   * slow disk can never stall the animation.
    */
   private swallow(path: string) {
     const name = path.split(/[\\/]/).pop() || "file";

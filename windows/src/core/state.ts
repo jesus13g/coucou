@@ -1,4 +1,4 @@
-// App state — mirror of AppState.swift (the parts the island needs).
+// App state — the parts the island needs.
 
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
@@ -56,7 +56,7 @@ const task = (
   id, name, color, state: "idle", stepIndex: 0, steps: [], source, isIntegration: true,
 });
 
-/** AgentTask.integrationAgents — same ids, names and colours as macOS. */
+/** The integration agents — fixed ids, names and colours. */
 export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_claude", "VS Code", "#F5F6F8", "claudeCode"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),

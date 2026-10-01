@@ -1,6 +1,5 @@
-// Island geometry — ported from IslandTypes.swift + IslandWindowController.islandSize
-// + IslandRootView.botPosition. All values are logical pixels, identical to the
-// macOS app's points.
+// Island geometry: island sizes per mode and view, and where Mochi sits.
+// All values are logical pixels.
 
 export type IslandMode = "hidden" | "compact" | "expanded";
 
@@ -48,15 +47,15 @@ export interface ViewLayout {
   agentMode: AgentLayoutMode;
 }
 
-// The window is a fixed 720×320 (largest view) like the macOS panel; the island is
+// The window is a fixed 720×320 (largest view); the island is
 // drawn inside it, glued to the top edge and horizontally centred.
 export const PANEL_W = 720;
 export const PANEL_H = 320;
 
-// No notch on a PC: these are the hidden/compact sizes from docs/SPEC.md.
-export const NOTCH_W = 184;
-export const NOTCH_H = 32;
-export const COMPACT_W = 288; // NOTCH_W + 104
+// The hidden/compact sizes from docs/SPEC.md.
+export const BASE_W = 184;
+export const BASE_H = 32;
+export const COMPACT_W = 288; // BASE_W + 104
 export const EXPANDED_W = 640;
 
 export const ROUNDED_CORNER = 14; // hidden / compact
@@ -75,8 +74,7 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   finished: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
   confused: { height: 160, botX: 76, botY: null, botDiameter: 66, agentMode: "column" },
   upload: { height: 176, botX: 140, botY: 104, botDiameter: 62, agentMode: "column" },
-  // botY 103 = bar top (42 + 58) + 3, so the dot really rides the bar. The Swift
-  // layout says 118 while its own comment says 103; the comment matches the spec.
+  // botY 103 = bar top (42 + 58) + 3, so the dot really rides the bar.
   uploading: { height: 176, botX: 46, botY: 103, botDiameter: 20, agentMode: "none" },
   choose: { height: 176, botX: 60, botY: 101, botDiameter: 52, agentMode: "column" },
   mail: { height: 240, botX: 56, botY: null, botDiameter: 46, agentMode: "column" },
@@ -90,7 +88,7 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
 
 // The upload views above are only the fallback geometry. Once a file is actually
 // dropped the whole sequence — Mochi included — is drawn by src/upload, which
-// owns its own constants (USC) straight from UploadSequenceEngine.swift.
+// owns its own constants (USC).
 
 /** Chat view grows with the conversation — IslandContainer.chatPromptHeight. */
 export function chatPromptHeight(messageCount: number): number {
@@ -104,11 +102,11 @@ export function islandSize(
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
-      // No notch to hide inside on a PC: the island retracts to zero height and
-      // slides into the top edge of the screen instead of sitting there as a bar.
-      return { w: NOTCH_W, h: 0 };
+      // The island retracts to zero height and slides into the top edge of the
+      // screen instead of sitting there as a bar.
+      return { w: BASE_W, h: 0 };
     case "compact":
-      return { w: COMPACT_W, h: NOTCH_H };
+      return { w: COMPACT_W, h: BASE_H };
     case "expanded": {
       const h = view === "prompt" ? chatPromptHeight(chatCount) : VIEW_LAYOUTS[view].height;
       return { w: EXPANDED_W, h };
@@ -199,9 +197,6 @@ const PROJECT_COLORS: Record<string, string> = {
   "ig post": "#7C5CFF",
   "louisraille.fr": "#38BDF8",
   louisraille: "#38BDF8",
-  "notch buddy": "#EC4899",
-  "notch-buddy": "#EC4899",
-  notchbuddy: "#EC4899",
 };
 
 const FALLBACK_COLORS = ["#22C55E", "#EAB308", "#60A5FA", "#E879F9"];

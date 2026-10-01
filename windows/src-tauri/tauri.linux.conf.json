@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
+    "resources": {
+      "../target/release/coucou-hook": "coucou-hook"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libx11-6"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "libX11"
+        ]
+      }
+    }
+  }
+}

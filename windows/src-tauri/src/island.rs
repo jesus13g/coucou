@@ -1,9 +1,13 @@
 // Island window: placement on the chosen display, the two window sizes
 // (full panel / invisible wake strip), click-through and the cursor poll.
 //
-// There is no notch on a PC, so the island is a black shape drawn at the top
+// The island is a black shape drawn at the top
 // centre of the main display inside a borderless, transparent, always-on-top
 // window that never takes focus.
+//
+// Windows talks to Win32 directly. Linux runs on X11 — natively or through
+// XWayland, see `prepare_linux_environment` — reads the cursor with
+// XQueryPointer and tunes the window through GTK.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -12,18 +16,25 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
+#[cfg(windows)]
 use windows::Win32::Foundation::{HWND, POINT};
+#[cfg(windows)]
 use windows::core::BOOL;
+#[cfg(windows)]
 use windows::Win32::Foundation::LPARAM;
+#[cfg(windows)]
 use windows::Win32::System::Ole::RevokeDragDrop;
+#[cfg(windows)]
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+#[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetClassNameW};
+#[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
     WS_EX_TOOLWINDOW,
 };
 
-/// Logical size of the full window — the largest island view, like the macOS panel.
+/// Logical size of the full window — the largest island view.
 pub const PANEL_W: f64 = 720.0;
 pub const PANEL_H: f64 = 320.0;
 /// Logical size of the invisible strip that wakes the island when it is hidden.
@@ -33,7 +44,7 @@ pub const STRIP_H: f64 = 6.0;
 pub const WINDOW_LABEL: &str = "island";
 
 /// Margin around the island that still counts as "on the island", in logical px.
-/// Wider than the macOS 6 pt because a click must never be swallowed.
+/// Generous because a click must never be swallowed.
 const HIT_MARGIN: f64 = 14.0;
 
 #[derive(Serialize, Clone)]
@@ -70,6 +81,11 @@ pub struct PollGate {
     pub rect: Mutex<IslandRect>,
     /// Mirrors the window flag so we only call into Win32 when it changes.
     ignoring: AtomicBool,
+    /// Linux: where the X pointer was when GTK said it left the island window.
+    /// Under XWayland the X position freezes once the pointer is over a native
+    /// Wayland window, so "still exactly there" means "gone".
+    #[cfg(target_os = "linux")]
+    left_at: Mutex<Option<(f64, f64)>>,
 }
 
 impl PollGate {
@@ -80,6 +96,8 @@ impl PollGate {
             collapsed: AtomicBool::new(true),
             rect: Mutex::new(IslandRect::default()),
             ignoring: AtomicBool::new(false),
+            #[cfg(target_os = "linux")]
+            left_at: Mutex::new(None),
         }
     }
 
@@ -114,10 +132,109 @@ pub fn window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(WINDOW_LABEL)
 }
 
+#[cfg(windows)]
 fn cursor_physical() -> Option<(f64, f64)> {
     let mut p = POINT::default();
     unsafe { GetCursorPos(&mut p).ok()? };
     Some((p.x as f64, p.y as f64))
+}
+
+#[cfg(target_os = "linux")]
+fn cursor_physical() -> Option<(f64, f64)> {
+    x11::pointer().map(|p| (p.x, p.y))
+}
+
+/// The X11 side of the cursor poll. Each thread that asks gets its own Xlib
+/// connection (Xlib connections must not be shared between threads without
+/// XInitThreads, and GTK keeps its own), opened on first use and kept for the
+/// life of the thread. libX11 is loaded at run time, so nothing is linked in.
+#[cfg(target_os = "linux")]
+mod x11 {
+    use std::cell::RefCell;
+    use x11_dl::xlib::{self, Display, Xlib};
+
+    struct Conn {
+        xlib: Xlib,
+        display: *mut Display,
+    }
+
+    impl Drop for Conn {
+        fn drop(&mut self) {
+            unsafe { (self.xlib.XCloseDisplay)(self.display) };
+        }
+    }
+
+    thread_local! {
+        // Outer None: not tried yet. Inner None: no X server to talk to.
+        static CONN: RefCell<Option<Option<Conn>>> = const { RefCell::new(None) };
+    }
+
+    pub struct Pointer {
+        pub x: f64,
+        pub y: f64,
+        pub left_down: bool,
+    }
+
+    fn open() -> Option<Conn> {
+        let xlib = Xlib::open().ok()?;
+        let display = unsafe { (xlib.XOpenDisplay)(std::ptr::null()) };
+        if display.is_null() {
+            return None;
+        }
+        Some(Conn { xlib, display })
+    }
+
+    /// Pointer position in root (physical) coordinates and the primary button.
+    pub fn pointer() -> Option<Pointer> {
+        CONN.with(|cell| {
+            let mut cell = cell.borrow_mut();
+            let conn = cell.get_or_insert_with(open).as_ref()?;
+            unsafe {
+                let root = (conn.xlib.XDefaultRootWindow)(conn.display);
+                let (mut root_ret, mut child) = (0, 0);
+                let (mut rx, mut ry, mut wx, mut wy) = (0, 0, 0, 0);
+                let mut mask = 0u32;
+                let same_screen = (conn.xlib.XQueryPointer)(
+                    conn.display,
+                    root,
+                    &mut root_ret,
+                    &mut child,
+                    &mut rx,
+                    &mut ry,
+                    &mut wx,
+                    &mut wy,
+                    &mut mask,
+                );
+                if same_screen == 0 {
+                    return None;
+                }
+                Some(Pointer {
+                    x: rx as f64,
+                    y: ry as f64,
+                    left_down: mask & xlib::Button1Mask != 0,
+                })
+            }
+        })
+    }
+}
+
+/// Runs before GTK starts. Coucou needs things Wayland deliberately does not
+/// give an app — placing its own window, staying above the others, reading the
+/// cursor outside its window — so on a Wayland session it runs through XWayland,
+/// which every mainstream compositor ships. `COUCOU_NATIVE_WAYLAND=1` (or an
+/// explicit GDK_BACKEND) opts out.
+#[cfg(target_os = "linux")]
+pub fn prepare_linux_environment() {
+    let set = |k: &str| std::env::var_os(k).is_some_and(|v| !v.is_empty());
+    if !set("COUCOU_NATIVE_WAYLAND") && !set("GDK_BACKEND") && set("WAYLAND_DISPLAY") && set("DISPLAY") {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+    // WebKitGTK's DMA-BUF renderer draws transparent windows black or blank on a
+    // number of drivers (NVIDIA above all). The island is tiny; the old path is
+    // plenty fast. Anyone who wants it back can set the variable themselves.
+    if !set("WEBKIT_DISABLE_DMABUF_RENDERER") {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
 }
 
 /// Lets dropped files reach the app again.
@@ -131,6 +248,7 @@ fn cursor_physical() -> Option<(f64, f64)> {
 /// that feeds Tauri's drag events.
 ///
 /// Cheap and idempotent, so it is simply re-run whenever a drag might be starting.
+#[cfg(windows)]
 pub fn unblock_webview_drops(app: &AppHandle) {
     for label in [WINDOW_LABEL, "settings"] {
         let Some(win) = app.get_webview_window(label) else { continue };
@@ -141,6 +259,11 @@ pub fn unblock_webview_drops(app: &AppHandle) {
     }
 }
 
+/// WebKitGTK delivers drops to the GTK widget wry listens on; nothing to undo.
+#[cfg(not(windows))]
+pub fn unblock_webview_drops(_app: &AppHandle) {}
+
+#[cfg(windows)]
 unsafe extern "system" fn revoke_render_widget(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut name = [0u16; 64];
     let len = unsafe { GetClassNameW(hwnd, &mut name) };
@@ -155,8 +278,14 @@ unsafe extern "system" fn revoke_render_widget(hwnd: HWND, _: LPARAM) -> BOOL {
 
 /// True while the left mouse button is held — the only signal we get that a
 /// drag might be in flight before it reaches the window.
+#[cfg(windows)]
 fn left_button_down() -> bool {
     unsafe { (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0 }
+}
+
+#[cfg(target_os = "linux")]
+fn left_button_down() -> bool {
+    x11::pointer().is_some_and(|p| p.left_down)
 }
 
 fn monitor_contains(m: &Monitor, x: f64, y: f64) -> bool {
@@ -224,6 +353,7 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let _ = win.set_always_on_top(true);
 }
 
+#[cfg(windows)]
 fn hwnd_of(win: &WebviewWindow) -> Option<HWND> {
     let raw = win.hwnd().ok()?.0 as isize;
     if raw == 0 {
@@ -234,6 +364,7 @@ fn hwnd_of(win: &WebviewWindow) -> Option<HWND> {
 
 /// WS_EX_NOACTIVATE keeps clicks from stealing focus; WS_EX_TOOLWINDOW keeps the
 /// island out of Alt-Tab.
+#[cfg(windows)]
 pub fn make_non_activating(win: &WebviewWindow) {
     let Some(hwnd) = hwnd_of(win) else { return };
     unsafe {
@@ -244,6 +375,7 @@ pub fn make_non_activating(win: &WebviewWindow) {
 }
 
 /// Temporarily allow activation so a text field inside the island can be typed in.
+#[cfg(windows)]
 pub fn set_activating(win: &WebviewWindow, activating: bool) {
     let Some(hwnd) = hwnd_of(win) else { return };
     unsafe {
@@ -255,6 +387,85 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
         };
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, want);
     }
+}
+
+/// The GTK equivalent: no focus on click or map, out of the taskbar, the pager
+/// and Alt-Tab, above everything. The utility hint is what makes tiling window
+/// managers (i3, sway's XWayland side…) float it rather than tile it. GTK is
+/// main-thread only, so the work is posted there.
+#[cfg(target_os = "linux")]
+pub fn make_non_activating(win: &WebviewWindow) {
+    let target = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        let Ok(gw) = target.gtk_window() else { return };
+        gw.set_type_hint(gtk::gdk::WindowTypeHint::Utility);
+        gw.set_accept_focus(false);
+        gw.set_focus_on_map(false);
+        gw.set_skip_taskbar_hint(true);
+        gw.set_skip_pager_hint(true);
+        gw.set_keep_above(true);
+        gw.stick();
+    });
+}
+
+#[cfg(target_os = "linux")]
+pub fn set_activating(win: &WebviewWindow, activating: bool) {
+    let target = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        let Ok(gw) = target.gtk_window() else { return };
+        gw.set_accept_focus(activating);
+        if activating {
+            gw.present();
+        }
+    });
+}
+
+/// XWayland only updates the X pointer while it is over an X window, so once it
+/// moves onto a native Wayland window the poll would keep seeing the last spot
+/// on the island and the island would never close. GTK still tells us when the
+/// pointer really leaves, so remember where that happened.
+#[cfg(target_os = "linux")]
+pub fn track_pointer_leave(win: &WebviewWindow, gate: Arc<PollGate>) {
+    let target = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        let Ok(gw) = target.gtk_window() else { return };
+        let leave_gate = gate.clone();
+        gw.connect_leave_notify_event(move |_, event| {
+            if event.detail() != gtk::gdk::NotifyType::Inferior {
+                *leave_gate.left_at.lock().unwrap() = cursor_physical();
+            }
+            gtk::glib::Propagation::Proceed
+        });
+        gw.connect_enter_notify_event(move |_, _| {
+            *gate.left_at.lock().unwrap() = None;
+            gtk::glib::Propagation::Proceed
+        });
+    });
+}
+
+/// The cursor as the poll should see it: on Linux, a pointer frozen where it left
+/// the window is reported far away.
+#[cfg(target_os = "linux")]
+fn cursor_for_poll(gate: &PollGate) -> Option<(f64, f64)> {
+    let now = cursor_physical()?;
+    let mut left = gate.left_at.lock().unwrap();
+    match *left {
+        Some(at) if at == now => Some((-100_000.0, -100_000.0)),
+        Some(_) => {
+            // It moved, so X can see it again: trust it from here on.
+            *left = None;
+            Some(now)
+        }
+        None => Some(now),
+    }
+}
+
+#[cfg(windows)]
+fn cursor_for_poll(_gate: &PollGate) -> Option<(f64, f64)> {
+    cursor_physical()
 }
 
 /// Position, size and scale of the monitor the island lives on. Any change here
@@ -305,7 +516,7 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                 let Some(win) = window(&app) else { continue };
                 let Ok(origin) = win.outer_position() else { continue };
                 let scale = win.scale_factor().unwrap_or(1.0);
-                let Some((cx, cy)) = cursor_physical() else { continue };
+                let Some((cx, cy)) = cursor_for_poll(&gate) else { continue };
                 let x = (cx - origin.x as f64) / scale;
                 let y = (cy - origin.y as f64) / scale;
                 let size = match win.inner_size() {
@@ -330,10 +541,9 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                 // A file being dragged has to be able to find us. WS_EX_TRANSPARENT
                 // — what click-through is on Windows — hides the window from
                 // WindowFromPoint, so OLE finds no drop target and shows the "no
-                // drop" cursor. macOS has no such problem: AppKit delivers drags to
-                // registered destinations whatever ignoresMouseEvents says. So while
-                // a button is held anywhere over the panel, the whole panel takes
-                // the mouse, which also makes the drop zone as forgiving as the Mac's.
+                // drop" cursor. So while a button is held anywhere over the panel,
+                // the whole panel takes the mouse, which also makes the drop zone
+                // more forgiving.
                 // A press may be the start of a drag: make sure the drop target is
                 // ours before the file arrives.
                 let down = left_button_down();

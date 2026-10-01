@@ -1,4 +1,4 @@
-// Integration events → island state. Port of the `handle…` methods in the Swift
+// Integration events → island state. The `handle…` methods of the
 // pollers: a genuinely new item flips the pill to finished/error, badges it when
 // the pill isn't focused, plays a sound, and clears itself after 60 s.
 
@@ -62,7 +62,7 @@ function handle(island: Island, update: IntegrationUpdate) {
         task.pillBadge = event.success ? "finished" : "error";
       }
       Sound.play(event.success ? "finish" : "error");
-      // Same as the Swift pollers: show the compact island so the badge is seen,
+      // Show the compact island so the badge is seen,
       // but never steal the screen for a successful deploy.
       island.reveal();
 
