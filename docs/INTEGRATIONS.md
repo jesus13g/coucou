@@ -3,7 +3,6 @@
 Règle d'or : **vérifier la doc officielle au moment d'implémenter**. Les formats ci-dessous sont le plan, pas une garantie. Sources à relire :
 - Hooks Claude Code : https://code.claude.com/docs/en/hooks
 - API Claude (Messages, outil de recherche web, modèles) : https://docs.claude.com/en/api/overview
-- API publique n8n : `{URL de l'instance}/api/v1/docs` (playground de l'instance de Louis)
 
 ---
 
@@ -60,39 +59,22 @@ Le bouton « Ouvrir le terminal » ouvre le dossier `cwd` de la session dans le 
 
 ---
 
-## 2. n8n (workflows de Louis)
-
-- Réglages : URL de l'instance (probablement `https://n8nlouis.dcsys.tech`, **à confirmer avec Louis**) et clé API n8n (magasin de clés du système). La clé se crée dans n8n : Settings → n8n API.
-- L'app joint n8n, pas l'inverse : **polling** toutes les 5 s de l'API publique :
-  - noms des workflows : `GET /api/v1/workflows` (cache 10 min) ;
-  - exécutions récentes : `GET /api/v1/executions` avec filtres de statut et `limit`.
-- Mapping :
-  - exécution en cours → tâche `working` (si l'API expose les exécutions en cours ; sinon n8n n'apparaît qu'aux erreurs et aux succès, c'est acceptable) ;
-  - nouvelle exécution en erreur → alerte `error`, détail = nœud en échec + message (`GET /api/v1/executions/{id}?includeData=true`) ;
-  - succès → mini-bonhomme `finished` 3 s en compact, **sans** ouvrir l'island (sinon trop de bruit), sauf réglage contraire.
-- Boutons :
-  - « Relancer » → endpoint de retry de l'API publique (vérifier sa présence et son chemin dans le playground de l'instance). S'il n'existe pas : ouvrir l'exécution dans n8n.
-  - « Ouvrir dans n8n » → ouvrir `{URL}/workflow/{workflowId}/executions/{executionId}` dans le navigateur par défaut.
-- Réglage « workflows suivis » : tous par défaut, liste à cocher.
-
----
-
-## 3. Fichiers déposés
+## 2. Fichiers déposés
 
 - Glisser-déposer sur la fenêtre de l'island. Copier les fichiers dans l'inbox de l'app — `%LOCALAPPDATA%\Coucou\inbox` (Windows), `~/.local/share/coucou/inbox` (Linux) — c'est la phase `uploading`.
 - Vue `choose` :
-  - **Poser une question dessus** → vue `prompt` avec une pastille du fichier. Envoi à l'API Claude (§5) : PDF en bloc `document`, images en bloc `image`, texte et code (≤ 200 Ko) en texte. Autres types : message « Je ne sais pas lire ce format. »
+  - **Poser une question dessus** → vue `prompt` avec une pastille du fichier. Envoi à l'API Claude (§4) : PDF en bloc `document`, images en bloc `image`, texte et code (≤ 200 Ko) en texte. Autres types : message « Je ne sais pas lire ce format. »
 - Nettoyer l'inbox après 7 jours.
 
 ---
 
-## 4. Attacher le bonhomme à une fenêtre
+## 3. Attacher le bonhomme à une fenêtre
 
 Non disponible dans cette version (Windows et Linux).
 
 ---
 
-## 5. API Claude (recherche)
+## 4. API Claude (recherche)
 
 - `POST https://api.anthropic.com/v1/messages`, en-têtes `x-api-key`, `anthropic-version`, `content-type: application/json` (versions à vérifier dans la doc).
 - Modèle par défaut : `claude-sonnet-5`, réglable dans les réglages. Vérifier la liste des modèles disponibles dans la doc.
@@ -102,19 +84,19 @@ Non disponible dans cette version (Windows et Linux).
   { "title": "…", "items": [ { "label": "…", "detail": "…", "url": "…" } ], "note": "…" }
   ```
   3 items maximum. Si le JSON est invalide : afficher le texte brut (3 lignes max) dans la vue `result`.
-- Contenu du message utilisateur : fichier (§3) + demande, ou demande seule (onglet Demander).
+- Contenu du message utilisateur : fichier (§2) + demande, ou demande seule (onglet Demander).
 - Pendant l'appel : état `searching`, vue `searching`, texte scintillant. Réponse : état `finished`, vue `result`, émote Fier, son `finish`.
 - Boutons du résultat : « Ouvrir » (premier lien, seulement s'il est en http ou https ; sinon le bouton est grisé), « Copier » (texte), « Fermer ».
 - Erreur réseau ou clé invalide : état `error`, vue `note` avec la raison en une phrase et « Ouvre les réglages pour vérifier la clé ».
 
 ---
 
-## 6. Envoi par e-mail
+## 5. Envoi par e-mail
 
 Non disponible dans cette version (Windows et Linux).
 
 ---
 
-## 7. Autorisations système
+## 6. Autorisations système
 
 Aucune autorisation particulière ni droit administrateur, sous Windows comme sous Linux. Sous Linux, les clés sont rangées dans le Secret Service (GNOME Keyring, KWallet, KeePassXC).

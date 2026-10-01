@@ -323,9 +323,9 @@ code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12px;backgroun
       <div class="view" data-view="error">
         <div class="card full wash red"><div class="copy">
           <div class="who"><i class="dot" data-f="dot"></i><b data-f="name"></b><span data-f="tool"></span></div>
-          <div class="big">Le workflow s'est arrêté.</div>
-          <div class="sub red">Le nœud Gmail a expiré après 30 s. Relance ou ouvre n8n pour voir l'exécution.</div>
-          <div class="row"><button class="btn primary" data-act="retry">Relancer</button><button class="btn" data-act="open-n8n">Ouvrir dans n8n</button></div>
+          <div class="big">La session s'est arrêtée sur une erreur.</div>
+          <div class="sub red">La commande a expiré après 30 s. Relance ou ouvre le terminal pour voir l'erreur.</div>
+          <div class="row"><button class="btn primary" data-act="retry">Relancer</button><button class="btn" data-act="jump">Voir le terminal</button></div>
         </div></div>
       </div>
 
@@ -431,7 +431,7 @@ code{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:12px;backgroun
   </div>
   <div class="grp g-sim">
     <h2>Simuler des événements</h2>
-    <p>Ce qui arrivera pour de vrai avec Claude Code et n8n branchés.</p>
+    <p>Ce qui arrivera pour de vrai avec Claude Code branché.</p>
     <div class="btns" id="simBtns"></div>
   </div>
   <div class="grp g-set">
@@ -680,8 +680,8 @@ class Bot{
 const AGENTS={
   korus:{name:'Korus',tool:'Claude Code',color:'#FF6B5B',short:'Korus',steps:['Lecture du schéma Prisma','Migration de la table factures','Mise à jour des tests','Lancement de la suite de tests','Relecture du diff']},
   sbe:{name:'SBE Hub',tool:'Claude Code',color:'#2DD4A7',short:'SBE Hub',steps:['Analyse des requêtes lentes','Index sur les cours','Écriture des tests']},
-  brief:{name:'Morning AI Brief',tool:'n8n',color:'#F7B32B',short:'Morning Brief',steps:['Collecte des sources','Résumé par Claude','Envoi Gmail']},
-  ig:{name:'Publication IG',tool:'n8n',color:'#A78BFA',short:'Publication IG',steps:['Rendu du carousel','Planification']},
+  brief:{name:'Morning AI Brief',tool:'Claude Code',color:'#F7B32B',short:'Morning Brief',steps:['Collecte des sources','Résumé par Claude','Envoi Gmail']},
+  ig:{name:'Publication IG',tool:'Claude Code',color:'#A78BFA',short:'Publication IG',steps:['Rendu du carousel','Planification']},
   folio:{name:'louisraille.fr',tool:'Claude Code',color:'#38BDF8',short:'Portfolio',steps:['Refonte du scroll','Optimisation des images']}
 };
 const app={piste:'mochi',mode:'hidden',view:'overview',tasks:[],focus:null,present:true,lastMove:NOW(),lastAct:NOW(),hover:false,autoClose:60000,demo:false,pinned:false,pinUntil:0,
@@ -862,7 +862,6 @@ function act(a,b){
     case 'deny': Snd.play('blip'); afterDecision(app.focus,'thinking'); break;
     case 'answer': Snd.play('approve'); afterDecision(app.focus,'thinking','happy'); break;
     case 'retry': Snd.play('work'); afterDecision(app.focus,'working','happy'); break;
-    case 'open-n8n': note("J'ouvre l'exécution dans n8n.",'Le workflow reste en erreur tant que tu ne le relances pas.'); break;
     case 'jump': if(f) removeTask(f.id); note('Je te ramène au terminal de Korus.','Dans l\'app, ça met au premier plan le bon onglet.'); break;
     case 'ok': if(f) removeTask(f.id); collapse(); break;
     case 'file-ask': app.ctx={type:'file',label:app.file}; renderChips(); expand('prompt'); if(!app.demo) setTimeout(()=>$('#promptIn').focus(),300); break;
@@ -916,7 +915,7 @@ const SIMS=[
   ['Lancer 3 tâches','#3B9EFF',()=>{ app.present=true; ['korus','sbe','brief'].forEach((id,i)=>setTimeout(()=>addTask(id,i===1?'thinking':'working'),i*260)); setTimeout(()=>{ if(app.mode==='hidden') setMode('compact'); Snd.play('work') },100) }],
   ['Demande de permission','#F5A524',()=>alertView('approval','korus','approval')],
   ['Question','#22D3EE',()=>alertView('question','sbe','question')],
-  ['Erreur n8n','#F4505E',()=>alertView('error','brief','error')],
+  ['Erreur','#F4505E',()=>alertView('error','brief','error')],
   ['Tâche terminée','#34D399',()=>alertView('finished','korus','finished')],
   ['Limite atteinte','#FB923C',()=>{ addTask('folio','working'); app.focus='folio'; setTask('folio','ratelimit'); ensureVisible(); Snd.play('rate') }],
   ['Utilisateur absent','#94A3B8',()=>{ app.present=false; collapse(); setMode('hidden') }],

@@ -35,12 +35,7 @@ impl Default for Settings {
             sound_volume: 0.12,
             auto_close_interval: 15.0,
             absence_interval: 180.0,
-            active_integrations: vec![
-                "integration_resend".into(),
-                "integration_n8n".into(),
-                "integration_vercel".into(),
-                "integration_github".into(),
-            ],
+            active_integrations: vec!["integration_github".into()],
             screen: "primary".into(),
             autostart: false,
             hooks_installed: false,
@@ -108,11 +103,20 @@ fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }
 
+/// The integrations the user can switch on. VS Code is always on and not listed.
+pub const INTEGRATION_IDS: &[&str] = &["integration_github", "integration_notion", "integration_calcom"];
+
 pub fn load() -> Settings {
-    match std::fs::read(settings_path()) {
+    let mut settings: Settings = match std::fs::read(settings_path()) {
         Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
         Err(_) => Settings::default(),
-    }
+    };
+    // A settings.json written by an older build can name integrations that no
+    // longer exist; they would still count towards the 4-integration limit.
+    settings
+        .active_integrations
+        .retain(|id| INTEGRATION_IDS.contains(&id.as_str()));
+    settings
 }
 
 pub fn save(settings: &Settings) -> std::io::Result<()> {

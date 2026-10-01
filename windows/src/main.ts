@@ -61,7 +61,7 @@ async function main() {
   });
 
   registerHookHandlers(island);
-  registerIntegrationHandlers(island);
+  registerIntegrationHandlers();
 
   island.launch();
 
