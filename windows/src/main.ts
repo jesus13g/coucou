@@ -54,6 +54,12 @@ async function main() {
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {
+    // A conversation started with one provider can't go on with the other: the
+    // Claude API's images, PDFs and search results would break a local model.
+    if (s.provider !== State.settings.provider) {
+      State.chatHistory = [];
+      void Bridge.chatReset();
+    }
     State.settings = { ...State.settings, ...s };
     island.applySettings();
     State.loadIntegrationTasks();

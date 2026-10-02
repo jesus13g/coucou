@@ -119,6 +119,25 @@ detects it — from the work area, or from what Hyprland reserves on that
 display; otherwise type it in screen pixels (bar height × scale, e.g.
 24 × 1.5 = 36).
 
+## Chat with a local model
+
+Settings → **Chat** → **Provider** → **Local model (llama-server)** sends the
+chat to a model on your own machine instead of the Claude API. Point
+**Endpoint** at its Messages API — `http://127.0.0.1:8080/v1/messages` for a
+default `llama-server` (a recent llama.cpp build serves `/v1/messages`). The API
+key is only needed if the server was started with `--api-key`.
+
+What changes compared to Claude:
+
+- **No web search** — that is a tool on Anthropic's servers.
+- **No images** unless the model has vision; Coucou says so instead of sending them.
+- **PDFs** are turned into text with `pdftotext` (`poppler` on Arch). Scanned
+  PDFs without a text layer can't be read.
+- **Smaller context.** llama-server gives each slot `--ctx-size / --parallel`
+  tokens (8192 with `16384` and `2`). Coucou keeps text files under 12 KB and
+  drops the oldest turns of a long conversation — the dropped turns include a
+  file sent at the start. Run with `--parallel 1` or a bigger context for more room.
+
 ## Tray icon
 
 The tray menu (Open, Settings…, Pause, Quit) uses AppIndicator / StatusNotifier.

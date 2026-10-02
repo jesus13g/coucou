@@ -172,7 +172,7 @@ function claudeSection(status: HookStatus): HTMLElement {
   return section;
 }
 
-// ── Claude API section ────────────────────────────────────────────────────────
+// ── Chat section ──────────────────────────────────────────────────────────────
 
 const MODELS: [string, string][] = [
   ["claude-opus-5", "Claude Opus 5"],
@@ -180,13 +180,22 @@ const MODELS: [string, string][] = [
   ["claude-haiku-4-5", "Claude Haiku 4.5"],
 ];
 
-function apiSection(hasKey: boolean): HTMLElement {
-  const dot = statusDot(hasKey);
-  const state = h("span", { class: "hint", text: hasKey ? `Key saved in the ${KEY_STORE}.` : "No key yet — the chat needs one." });
+const PROVIDERS: [Settings["provider"], string][] = [
+  ["anthropic", "Anthropic API"],
+  ["local", "Local model (llama-server)"],
+];
 
+/** A key-store entry the user can save or remove — never read back. */
+function keyRow(
+  key: string,
+  label: string,
+  placeholder: string,
+  present: boolean,
+  onChange: (present: boolean) => void,
+): HTMLElement[] {
   const field = h("input", {
     type: "password",
-    placeholder: hasKey ? "••••••••••••  (stored)" : "sk-ant-...",
+    placeholder: present ? "••••••••••••  (stored)" : placeholder,
     style: "flex:1 1 auto;min-width:0",
     autocomplete: "off",
     spellcheck: "false",
@@ -197,13 +206,10 @@ function apiSection(hasKey: boolean): HTMLElement {
   const feedback = h("div", {});
 
   async function refresh() {
-    const present = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
-    dot.style.background = present ? "#22c55e" : "#f4505e";
-    state.textContent = present
-      ? `Key saved in the ${KEY_STORE}.`
-      : "No key yet — the chat needs one.";
-    field.placeholder = present ? "••••••••••••  (stored)" : "sk-ant-...";
-    clearBtn.style.display = present ? "" : "none";
+    const now = (await Bridge.secretPresent(key)) ?? false;
+    field.placeholder = now ? "••••••••••••  (stored)" : placeholder;
+    clearBtn.style.display = now ? "" : "none";
+    onChange(now);
   }
 
   saveBtn.addEventListener("click", async () => {
@@ -211,7 +217,7 @@ function apiSection(hasKey: boolean): HTMLElement {
     if (!value) return;
     clear(feedback);
     try {
-      await Bridge.secretSet("anthropic-api-key", value);
+      await Bridge.secretSet(key, value);
       field.value = "";
       feedback.append(h("div", { class: "notice ok", text: "Saved. It never touches disk." }));
       await refresh();
@@ -223,7 +229,7 @@ function apiSection(hasKey: boolean): HTMLElement {
   clearBtn.addEventListener("click", async () => {
     clear(feedback);
     try {
-      await Bridge.secretClear("anthropic-api-key");
+      await Bridge.secretClear(key);
       feedback.append(h("div", { class: "notice ok", text: "Key removed." }));
       await refresh();
     } catch (err) {
@@ -231,28 +237,98 @@ function apiSection(hasKey: boolean): HTMLElement {
     }
   });
 
-  const model = h("select", {}) as HTMLSelectElement;
-  for (const [id, label] of MODELS) model.append(h("option", { value: id, text: label }));
-  if (!MODELS.some(([id]) => id === settings.model)) {
-    model.append(h("option", { value: settings.model, text: settings.model }));
+  clearBtn.style.display = present ? "" : "none";
+
+  return [h("div", { class: "row" }, h("label", { text: label }), field, saveBtn, clearBtn), feedback];
+}
+
+function apiSection(hasKey: boolean, hasLocalKey: boolean): HTMLElement {
+  const section = h("section", {});
+  const present = { anthropic: hasKey, local: hasLocalKey };
+
+  function draw() {
+    clear(section);
+    const local = settings.provider === "local";
+
+    const dot = statusDot(false);
+    const state = h("span", { class: "hint" });
+    const updateState = () => {
+      const ready = local ? settings.localEndpoint.trim() !== "" : present.anthropic;
+      dot.style.background = ready ? "#22c55e" : "#f4505e";
+      state.textContent = local
+        ? "Runs on your own machine. No web search, no images."
+        : ready
+          ? `Key saved in the ${KEY_STORE}.`
+          : "No key yet — the chat needs one.";
+    };
+    updateState();
+
+    const provider = h("select", {}) as HTMLSelectElement;
+    for (const [id, label] of PROVIDERS) provider.append(h("option", { value: id, text: label }));
+    provider.value = settings.provider;
+    provider.addEventListener("change", () => {
+      settings.provider = provider.value as Settings["provider"];
+      void save();
+      draw();
+    });
+
+    section.append(
+      h("h2", {}, dot, h("span", { text: "Chat" })),
+      state,
+      h("div", { class: "row" }, h("label", { text: "Provider" }), provider),
+    );
+
+    if (local) {
+      const endpoint = h("input", {
+        type: "text",
+        value: settings.localEndpoint,
+        placeholder: DEFAULT_SETTINGS.localEndpoint,
+        style: "flex:1 1 auto;min-width:0",
+        autocomplete: "off",
+        spellcheck: "false",
+      }) as HTMLInputElement;
+      const endpointFeedback = h("div", {});
+      endpoint.addEventListener("change", () => {
+        clear(endpointFeedback);
+        const value = endpoint.value.trim() || DEFAULT_SETTINGS.localEndpoint;
+        if (!/^https?:\/\//i.test(value)) {
+          endpointFeedback.append(
+            h("div", { class: "notice err", text: "The endpoint must start with http:// or https://." }),
+          );
+          return;
+        }
+        endpoint.value = value;
+        settings.localEndpoint = value;
+        void save();
+        updateState();
+      });
+
+      section.append(
+        h("div", { class: "row" }, h("label", { text: "Endpoint" }), endpoint),
+        endpointFeedback,
+        ...keyRow("local-api-key", "API key (optional)", "only if llama-server uses --api-key",
+          present.local, (now) => { present.local = now; }),
+      );
+    } else {
+      const model = h("select", {}) as HTMLSelectElement;
+      for (const [id, label] of MODELS) model.append(h("option", { value: id, text: label }));
+      if (!MODELS.some(([id]) => id === settings.model)) {
+        model.append(h("option", { value: settings.model, text: settings.model }));
+      }
+      model.value = settings.model;
+      model.addEventListener("change", () => {
+        settings.model = model.value;
+        void save();
+      });
+
+      const [keyLine, keyFeedback] = keyRow("anthropic-api-key", "API key", "sk-ant-...",
+        present.anthropic, (now) => { present.anthropic = now; updateState(); });
+      section.append(keyLine, h("div", { class: "row" }, h("label", { text: "Model" }), model), keyFeedback);
+    }
   }
-  model.value = settings.model;
-  model.addEventListener("change", () => {
-    settings.model = model.value;
-    void save();
-  });
 
-  clearBtn.style.display = hasKey ? "" : "none";
-
-  return h(
-    "section",
-    {},
-    h("h2", {}, dot, h("span", { text: "Claude" })),
-    state,
-    h("div", { class: "row" }, h("label", { text: "API key" }), field, saveBtn, clearBtn),
-    h("div", { class: "row" }, h("label", { text: "Model" }), model),
-    feedback,
-  );
+  draw();
+  return section;
 }
 
 // ── Integrations section ──────────────────────────────────────────────────────
@@ -454,6 +530,7 @@ async function main() {
   };
 
   const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+  const hasLocalKey = (await Bridge.secretPresent("local-api-key")) ?? false;
 
   const keys = ["github-token", "notion-api-key", "calcom-api-key"];
   const present: Record<string, boolean> = {};
@@ -463,7 +540,7 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
-    apiSection(hasKey),
+    apiSection(hasKey, hasLocalKey),
     integrationsSection(present),
     generalSection(),
     h("div", {
