@@ -64,7 +64,7 @@ const HOME_VAR: &str = "USERPROFILE";
 #[cfg(not(windows))]
 const HOME_VAR: &str = "HOME";
 
-fn home() -> PathBuf {
+pub(crate) fn home() -> PathBuf {
     std::env::var_os(HOME_VAR)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))

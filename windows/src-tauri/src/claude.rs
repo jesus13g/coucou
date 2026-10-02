@@ -5,7 +5,9 @@
 // Everything happens here rather than in the island: the API key never leaves
 // the Credential Manager, and file bytes never cross the IPC boundary.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -17,7 +19,7 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Server-side fallback: on a policy decline the API retries the same request on
 /// a fallback model inside the same call, so the island never shows a dead end.
 const FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
-const MAX_TOKENS: u32 = 4096;
+pub(crate) const MAX_TOKENS: u32 = 4096;
 /// Text and code files are inlined; anything larger is skipped.
 const MAX_INLINE_TEXT: u64 = 200_000;
 
@@ -33,7 +35,7 @@ const LOCAL_ANSWER_RESERVE: usize = 1536;
 /// Deliberately pessimistic, so the estimate errs on the side of fitting.
 const CHARS_PER_TOKEN: usize = 3;
 /// How much JSON-encoded history a local request may carry.
-const LOCAL_CONTEXT_CHARS: usize =
+pub(crate) const LOCAL_CONTEXT_CHARS: usize =
     (LOCAL_CONTEXT_TOKENS - LOCAL_ANSWER_RESERVE) * CHARS_PER_TOKEN - LOCAL_SYSTEM_PROMPT.len();
 
 const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
@@ -70,11 +72,35 @@ impl Provider {
 pub struct Chat {
     /// Full multi-turn history, including tool_use / tool_result blocks.
     messages: Mutex<Vec<Value>>,
+    /// Bumped on every reset, so a turn that started before the reset cannot
+    /// write its history back afterwards.
+    epoch: AtomicU64,
 }
 
 impl Chat {
     pub fn reset(&self) {
-        self.messages.lock().unwrap().clear();
+        let mut messages = self.messages.lock().unwrap();
+        messages.clear();
+        self.epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// The history a new turn starts from, and the epoch to commit it against.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn begin(&self) -> (u64, Vec<Value>) {
+        let messages = self.messages.lock().unwrap();
+        (self.epoch.load(Ordering::SeqCst), messages.clone())
+    }
+
+    /// Replaces the history with the one a finished turn built, unless the chat
+    /// was reset in the meantime. Returns whether it was written.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn commit(&self, epoch: u64, new_messages: Vec<Value>) -> bool {
+        let mut messages = self.messages.lock().unwrap();
+        if self.epoch.load(Ordering::SeqCst) != epoch {
+            return false;
+        }
+        *messages = new_messages;
+        true
     }
 
     fn is_empty(&self) -> bool {
@@ -116,40 +142,9 @@ pub async fn send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let key = match provider {
-        Provider::Anthropic => Some(
-            secrets::get("anthropic-api-key")
-                .ok_or_else(|| "API key missing. Open settings.".to_string())?,
-        ),
-        // Only a llama-server started with --api-key wants one.
-        Provider::Local { .. } => secrets::get("local-api-key"),
-    };
-
-    let mut content: Vec<Value> = Vec::new();
-
-    // File / window context rides along with the first message only, exactly
-    // like ClaudeService.chat().
-    if chat.is_empty() {
-        match &context {
-            Some(ChatContext::File { name, path }) => {
-                if let Some(block) = file_block(path, provider)? {
-                    content.push(block);
-                }
-                content.push(json!({ "type": "text", "text": format!("File: {name}") }));
-            }
-            Some(ChatContext::Window { app_name, title, url }) => {
-                let mut text = format!("Context — App: {app_name}, Window: {title}");
-                if let Some(url) = url {
-                    text.push_str(&format!(", URL: {url}"));
-                }
-                content.push(json!({ "type": "text", "text": text }));
-            }
-            None => {}
-        }
-    }
-    content.push(json!({ "type": "text", "text": query }));
-
-    chat.push(json!({ "role": "user", "content": content }));
+    let key = api_key(provider)?;
+    let user = user_message(chat.is_empty(), provider, query, context)?;
+    chat.push(user);
 
     let messages = match provider {
         Provider::Anthropic => chat.snapshot(),
@@ -162,13 +157,13 @@ pub async fn send(
             }
         },
     };
-    let body = request_body(provider, model, messages);
+    let body = request_body(provider, model, messages, &[]);
 
     let response = match call(provider, key.as_deref(), &body).await {
         Ok(v) => v,
         Err(err) => {
             chat.pop(); // keep the history consistent with what the model saw
-            return Err(err);
+            return Err(err.message);
         }
     };
 
@@ -207,35 +202,98 @@ pub async fn send(
     Ok(ChatReply { text })
 }
 
-/// The local body leaves out what only Anthropic's servers do: web search and
-/// server-side fallbacks.
-fn request_body(provider: &Provider, model: &str, messages: Vec<Value>) -> Value {
+/// The key for this provider: required for Anthropic, optional for a local
+/// model (only a llama-server started with --api-key wants one).
+pub(crate) fn api_key(provider: &Provider) -> Result<Option<String>, String> {
     match provider {
-        Provider::Anthropic => json!({
-            "model": model,
-            "max_tokens": MAX_TOKENS,
-            "system": SYSTEM_PROMPT,
-            "tools": [{ "type": "web_search_20260209", "name": "web_search", "max_uses": 5 }],
-            "fallbacks": "default",
-            "messages": messages,
-        }),
-        Provider::Local { .. } => json!({
-            "model": model,
-            "max_tokens": MAX_TOKENS,
-            "system": LOCAL_SYSTEM_PROMPT,
-            "messages": messages,
-        }),
+        Provider::Anthropic => Ok(Some(
+            secrets::get("anthropic-api-key")
+                .ok_or_else(|| "API key missing. Open settings.".to_string())?,
+        )),
+        Provider::Local { .. } => Ok(secrets::get("local-api-key")),
     }
 }
 
+/// The user message for one turn. File / window context rides along with the
+/// first message only, exactly like ClaudeService.chat().
+pub(crate) fn user_message(
+    first: bool,
+    provider: &Provider,
+    query: String,
+    context: Option<ChatContext>,
+) -> Result<Value, String> {
+    let mut content: Vec<Value> = Vec::new();
+    if first {
+        match &context {
+            Some(ChatContext::File { name, path }) => {
+                if let Some(block) = file_block(path, provider)? {
+                    content.push(block);
+                }
+                content.push(json!({ "type": "text", "text": format!("File: {name}") }));
+            }
+            Some(ChatContext::Window { app_name, title, url }) => {
+                let mut text = format!("Context — App: {app_name}, Window: {title}");
+                if let Some(url) = url {
+                    text.push_str(&format!(", URL: {url}"));
+                }
+                content.push(json!({ "type": "text", "text": text }));
+            }
+            None => {}
+        }
+    }
+    content.push(json!({ "type": "text", "text": query }));
+    Ok(json!({ "role": "user", "content": content }))
+}
+
+/// The local body leaves out what only Anthropic's servers do: web search and
+/// server-side fallbacks. `tools` are client-side tool schemas; a local body
+/// carries them only when there are some.
+pub(crate) fn request_body(provider: &Provider, model: &str, messages: Vec<Value>, tools: &[Value]) -> Value {
+    match provider {
+        Provider::Anthropic => {
+            let mut all = vec![json!({ "type": "web_search_20260209", "name": "web_search", "max_uses": 5 })];
+            all.extend(tools.iter().cloned());
+            json!({
+                "model": model,
+                "max_tokens": MAX_TOKENS,
+                "system": SYSTEM_PROMPT,
+                "tools": all,
+                "fallbacks": "default",
+                "messages": messages,
+            })
+        }
+        Provider::Local { .. } => {
+            let mut body = json!({
+                "model": model,
+                "max_tokens": MAX_TOKENS,
+                "system": LOCAL_SYSTEM_PROMPT,
+                "messages": messages,
+            });
+            if !tools.is_empty() {
+                body["tools"] = Value::Array(tools.to_vec());
+            }
+            body
+        }
+    }
+}
+
+/// Whether a message carries tool_result blocks — such a message can't lead a
+/// request, since its tool_use lives in the message before it.
+pub(crate) fn has_tool_result(m: &Value) -> bool {
+    m.get("content").and_then(Value::as_array).is_some_and(|blocks| {
+        blocks.iter().any(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))
+    })
+}
+
 /// Drops the oldest user + assistant turns until the history fits in `budget`
-/// characters of JSON, so it still starts with a user message. The last
-/// message — the one just asked — is never dropped.
-fn trim_for_budget(messages: &[Value], budget: usize) -> Result<Vec<Value>, String> {
+/// characters of JSON, so it still starts with a user message — and never with
+/// an orphaned tool_result. The last message — the one just asked — is never
+/// dropped.
+pub(crate) fn trim_for_budget(messages: &[Value], budget: usize) -> Result<Vec<Value>, String> {
     let size = |m: &Value| m.to_string().len();
     let mut total: usize = messages.iter().map(size).sum();
     let mut start = 0;
-    while total > budget {
+    while total > budget || messages.get(start).is_some_and(has_tool_result) {
         if messages.len() - start <= 1 {
             return Err("Too long for the local model's context. Try a shorter message or file.".into());
         }
@@ -245,11 +303,39 @@ fn trim_for_budget(messages: &[Value], budget: usize) -> Result<Vec<Value>, Stri
     Ok(messages[start..].to_vec())
 }
 
-async fn call(provider: &Provider, key: Option<&str>, body: &Value) -> Result<Value, String> {
+/// A failed API call, with what the agent loop needs to decide on a retry.
+// Read by the agent loop from step 2 on.
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone)]
+pub(crate) struct CallError {
+    pub message: String,
+    pub status: Option<u16>,
+    pub retryable: bool,
+    pub retry_after: Option<Duration>,
+}
+
+impl CallError {
+    fn fatal(message: String) -> Self {
+        CallError { message, status: None, retryable: false, retry_after: None }
+    }
+}
+
+/// Overloaded, rate-limited or a passing server/gateway hiccup.
+fn is_retryable_status(s: u16) -> bool {
+    matches!(s, 408 | 429 | 500 | 502 | 503 | 504 | 529)
+}
+
+/// `retry-after` in whole seconds, capped so the island never waits long.
+fn parse_retry_after(h: Option<&reqwest::header::HeaderValue>) -> Option<Duration> {
+    let secs: u64 = h?.to_str().ok()?.trim().parse().ok()?;
+    Some(Duration::from_secs(secs.min(30)))
+}
+
+pub(crate) async fn call(provider: &Provider, key: Option<&str>, body: &Value) -> Result<Value, CallError> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(90))
+        .timeout(Duration::from_secs(90))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| CallError::fatal(e.to_string()))?;
 
     let endpoint = match provider {
         Provider::Anthropic => ENDPOINT,
@@ -266,15 +352,26 @@ async fn call(provider: &Provider, key: Option<&str>, body: &Value) -> Result<Va
         request = request.header("anthropic-beta", FALLBACK_BETA);
     }
 
-    let response = request.json(body).send().await.map_err(|e| match provider {
-        Provider::Local { endpoint } if e.is_connect() || e.is_builder() => {
-            format!("Can't reach the local model at {endpoint}. Is llama-server running?")
-        }
-        _ => format!("Network error: {e}"),
+    let response = request.json(body).send().await.map_err(|e| {
+        let message = match provider {
+            Provider::Local { endpoint } if e.is_connect() || e.is_builder() => {
+                format!("Can't reach the local model at {endpoint}. Is llama-server running?")
+            }
+            _ => format!("Network error: {e}"),
+        };
+        // A stopped llama-server doesn't come back by retrying.
+        let retryable = e.is_timeout() || (e.is_connect() && *provider == Provider::Anthropic);
+        CallError { message, status: None, retryable, retry_after: None }
     })?;
 
     let status = response.status();
-    let text = response.text().await.map_err(|e| e.to_string())?;
+    let retry_after = parse_retry_after(response.headers().get(reqwest::header::RETRY_AFTER));
+    let text = response.text().await.map_err(|e| CallError {
+        message: e.to_string(),
+        status: None,
+        retryable: e.is_timeout(),
+        retry_after: None,
+    })?;
     if !status.is_success() {
         // Surface the API's own message, which is what makes a bad key obvious.
         let detail = serde_json::from_str::<Value>(&text)
@@ -290,9 +387,14 @@ async fn call(provider: &Provider, key: Option<&str>, body: &Value) -> Result<Va
             Provider::Anthropic => "Claude API",
             Provider::Local { .. } => "Local model",
         };
-        return Err(format!("{who} {status}: {detail}"));
+        return Err(CallError {
+            message: format!("{who} {status}: {detail}"),
+            status: Some(status.as_u16()),
+            retryable: is_retryable_status(status.as_u16()),
+            retry_after,
+        });
     }
-    serde_json::from_str(&text).map_err(|e| format!("Bad API response: {e}"))
+    serde_json::from_str(&text).map_err(|e| CallError::fatal(format!("Bad API response: {e}")))
 }
 
 /// PDF → document block, image → image block, text/code → inline text.
@@ -407,15 +509,89 @@ mod tests {
 
     #[test]
     fn local_body_has_no_web_search_or_fallbacks() {
-        let body = request_body(&local(), "m", vec![]);
+        let body = request_body(&local(), "m", vec![], &[]);
         assert!(body.get("tools").is_none());
         assert!(body.get("fallbacks").is_none());
         assert!(!body["system"].as_str().unwrap().contains("web search"));
 
-        let body = request_body(&Provider::Anthropic, "m", vec![]);
+        // Client-side tools do go to the local model.
+        let fake = json!({ "name": "echo", "description": "d", "input_schema": { "type": "object" } });
+        let body = request_body(&local(), "m", vec![], std::slice::from_ref(&fake));
+        assert_eq!(body["tools"], json!([fake.clone()]));
+        assert!(body.get("fallbacks").is_none());
+
+        let body = request_body(&Provider::Anthropic, "m", vec![], &[]);
         assert_eq!(body["tools"][0]["name"], "web_search");
+        assert_eq!(body["tools"].as_array().unwrap().len(), 1);
         assert_eq!(body["fallbacks"], "default");
         assert_eq!(body["system"], SYSTEM_PROMPT);
+
+        let body = request_body(&Provider::Anthropic, "m", vec![], &[fake.clone()]);
+        assert_eq!(body["tools"][0]["name"], "web_search");
+        assert_eq!(body["tools"][1], fake);
+    }
+
+    #[test]
+    fn trim_never_starts_with_tool_result() {
+        let user = json!({ "role": "user", "content": [{ "type": "text", "text": "q" }] });
+        let call = json!({ "role": "assistant", "content": [{ "type": "tool_use", "id": "t1", "name": "echo", "input": {} }] });
+        let result = json!({ "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "t1", "content": "x".repeat(50) }] });
+        let answer = json!({ "role": "assistant", "content": [{ "type": "text", "text": "a" }] });
+        let next = json!({ "role": "user", "content": [{ "type": "text", "text": "next" }] });
+        assert!(has_tool_result(&result));
+        assert!(!has_tool_result(&user));
+
+        let messages = vec![user.clone(), call.clone(), result.clone(), answer.clone(), next.clone()];
+        let size = |m: &Value| m.to_string().len();
+        let all: usize = messages.iter().map(size).sum();
+        // Dropping the first pair would leave the tool_result leading: that
+        // pair goes too.
+        let trimmed = trim_for_budget(&messages, all - 1).unwrap();
+        assert_eq!(trimmed, vec![next.clone()]);
+
+        // Nothing but the tool_result left to send: an error, not an orphan.
+        let messages = vec![user, call, result];
+        // Fits whole: untouched, since it starts with the user question.
+        assert_eq!(trim_for_budget(&messages, 1_000_000).unwrap().len(), 3);
+        let small = size(&messages[2]);
+        assert!(trim_for_budget(&messages, small).is_err());
+    }
+
+    #[test]
+    fn retryable_statuses() {
+        for s in [408, 429, 500, 502, 503, 504, 529] {
+            assert!(is_retryable_status(s), "{s}");
+        }
+        for s in [400, 401, 403, 404, 413] {
+            assert!(!is_retryable_status(s), "{s}");
+        }
+    }
+
+    #[test]
+    fn retry_after_parses_seconds_and_caps() {
+        use reqwest::header::HeaderValue;
+        assert_eq!(parse_retry_after(Some(&HeaderValue::from_static("3"))), Some(Duration::from_secs(3)));
+        assert_eq!(parse_retry_after(Some(&HeaderValue::from_static(" 12 "))), Some(Duration::from_secs(12)));
+        assert_eq!(parse_retry_after(Some(&HeaderValue::from_static("600"))), Some(Duration::from_secs(30)));
+        assert_eq!(parse_retry_after(Some(&HeaderValue::from_static("Wed, 21 Oct 2015 07:28:00 GMT"))), None);
+        assert_eq!(parse_retry_after(None), None);
+    }
+
+    #[test]
+    fn chat_commit_ignores_stale_epoch() {
+        let chat = Chat::default();
+        let (epoch, history) = chat.begin();
+        assert!(history.is_empty());
+        assert!(chat.commit(epoch, vec![json!({ "role": "user", "content": "a" })]));
+        assert_eq!(chat.begin().1.len(), 1);
+
+        let (stale, _) = chat.begin();
+        chat.reset();
+        assert!(!chat.commit(stale, vec![json!({ "role": "user", "content": "b" })]));
+        let (fresh, history) = chat.begin();
+        assert!(history.is_empty());
+        assert_ne!(fresh, stale);
+        assert!(chat.commit(fresh, vec![json!({ "role": "user", "content": "c" })]));
     }
 
     #[test]
