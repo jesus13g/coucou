@@ -7,6 +7,9 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_json::{json, Map, Value};
 
+pub mod list_dir;
+pub mod read_file;
+
 use super::cancel::Cancel;
 use super::transport::BoxFuture;
 
@@ -77,6 +80,14 @@ pub struct Registry {
 impl Registry {
     pub fn new(tools: Vec<Box<dyn Tool>>) -> Self {
         Registry { tools }
+    }
+
+    /// The phase 1 set: tools that only read, confined to `roots`.
+    pub fn read_only(roots: Vec<PathBuf>) -> Self {
+        Registry::new(vec![
+            Box::new(read_file::ReadFile::new(roots.clone())),
+            Box::new(list_dir::ListDir::new(roots)),
+        ])
     }
 
     pub fn get(&self, name: &str) -> Option<&dyn Tool> {
@@ -240,7 +251,7 @@ fn truncate_chars(text: &str, max: usize) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     struct Fake;
@@ -262,7 +273,7 @@ mod tests {
         }
     }
 
-    fn temp_root(name: &str) -> PathBuf {
+    pub(crate) fn temp_root(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("coucou-tools-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -276,6 +287,9 @@ mod tests {
         assert_eq!(registry.schemas()[0]["name"], "fake");
         assert!(registry.get("fake").is_some());
         assert!(registry.get("nope").is_none());
+
+        let registry = Registry::read_only(vec![std::env::temp_dir()]);
+        assert_eq!(registry.names(), vec!["read_file", "list_dir"]);
     }
 
     #[test]
