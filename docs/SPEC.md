@@ -95,6 +95,15 @@ Centre vertical du bonhomme : 36 + (hauteur − 46) / 2, sauf `result` (y = 86).
 ### Boutons
 - Pilule, 12,5 pt medium, fond blanc 9 % (survol 15 %), primaire : fond `#F5F6F8` texte `#0B0C0E`. Appui : échelle 0,94. Raccourcis affichés en petite pastille bordée (Y, N).
 
+### Outils du chat (phase 1)
+- Dans la vue `prompt`, Mochi peut utiliser trois outils en lecture seule : `read_file` (lire un fichier texte), `list_dir` (lister un dossier) et `web_fetch` (ouvrir une page web par son URL exacte, en GET, texte seulement). Avec l'API Claude, la recherche web côté serveur reste disponible.
+- Les fichiers ne sont lus que dans le dossier personnel. Les fichiers d'identifiants ne sont jamais lus (`.ssh`, `.gnupg`, `.aws`, clés `id_*`, `.env`, `*.pem`, profils de navigateur…).
+- `web_fetch` refuse `localhost`, `*.local` et les adresses IP privées, de bouclage ou link-local. Après la lecture d'un fichier local, il est refusé pour le reste de la demande, afin qu'aucun contenu local ne parte vers une URL.
+- Chaque appel d'outil s'affiche en pastille grise (style `.chip` du prototype) sous la question : « Reading notes.txt », « Opening example.com »… Pendant ce temps Mochi passe en `working` (fichiers) ou `searching` (web), et en `ratelimit` pendant une nouvelle tentative.
+- Pendant une demande, le bouton d'envoi devient « Stop ». Il annule la demande en cours : rien n'est gardé dans l'historique et la question revient dans le champ.
+- Une demande s'arrête après 25 étapes au plus, avec le message « I stopped after 25 steps… ».
+- Pas de télémétrie : le journal local ne note que le nombre d'étapes, les noms des outils et l'issue, jamais de contenu.
+
 ## 6. Couleurs des agents (fixes)
 
 | Agent | Couleur |
