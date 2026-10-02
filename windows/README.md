@@ -27,7 +27,9 @@ machine-learning false positive). A report is under review at Microsoft, and the
 installer will be published again once it is cleared and code-signed.
 
 Until then, [build it yourself](#build-it-yourself): it takes a few minutes and
-installs for the current user only — no admin prompt.
+installs for the current user only — no admin prompt. Without a Windows build
+setup, run the workflow by hand instead (**Actions → Windows → Run workflow**)
+and download the installer from the run's artifacts; it is kept for 3 days.
 
 ## Using it
 

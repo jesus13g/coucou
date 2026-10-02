@@ -78,11 +78,15 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           Get-ChildItem release | Format-Table Name, Length
 
+      # A run started by hand keeps the installer as a run artifact for a few
+      # days, for whoever started it to download. Nothing is published.
       - uses: actions/upload-artifact@v4
-        if: env.PUBLISH == 'true'
+        if: env.PUBLISH == 'true' || github.event_name == 'workflow_dispatch'
         with:
           name: Coucou-Windows-setup
           path: windows/release/Coucou-Windows-${{ steps.pack.outputs.version }}-setup.exe
+          if-no-files-found: error
+          retention-days: ${{ env.PUBLISH == 'true' && 90 || 3 }}
 
       - name: Publish the release
         if: env.PUBLISH == 'true' && startsWith(github.ref, 'refs/tags/windows-v')
