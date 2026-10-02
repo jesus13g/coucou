@@ -304,8 +304,6 @@ pub(crate) fn trim_for_budget(messages: &[Value], budget: usize) -> Result<Vec<V
 }
 
 /// A failed API call, with what the agent loop needs to decide on a retry.
-// Read by the agent loop from step 2 on.
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 pub(crate) struct CallError {
     pub message: String,
