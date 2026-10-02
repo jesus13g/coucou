@@ -19,11 +19,13 @@ use super::transport::BoxFuture;
 pub enum Risk {
     /// Reads local data.
     Read,
-    /// Changes local data (no such tool yet).
+    /// Changes local data (no such tool yet: phase 2).
+    #[allow(dead_code)]
     Write,
     /// Reaches a third-party service.
     External,
-    /// Sends something on the user's behalf (no such tool yet).
+    /// Sends something on the user's behalf (no such tool yet: phase 2).
+    #[allow(dead_code)]
     Send,
 }
 
@@ -35,8 +37,6 @@ pub struct ToolCtx<'a> {
 pub struct ToolOutput {
     /// Content blocks for the tool_result.
     pub for_model: Vec<Value>,
-    /// Optional structured data for the island.
-    pub for_ui: Option<Value>,
     /// One short line for the tool_end event — never file or page contents.
     pub summary: String,
     pub is_error: bool,
@@ -46,7 +46,6 @@ impl ToolOutput {
     pub fn text(text: impl Into<String>, summary: impl Into<String>) -> Self {
         ToolOutput {
             for_model: vec![json!({ "type": "text", "text": text.into() })],
-            for_ui: None,
             summary: summary.into(),
             is_error: false,
         }
@@ -57,7 +56,6 @@ impl ToolOutput {
         let summary = truncate_chars(&message, 60);
         ToolOutput {
             for_model: vec![json!({ "type": "text", "text": message })],
-            for_ui: None,
             summary,
             is_error: true,
         }

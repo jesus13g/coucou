@@ -1,7 +1,5 @@
 // Coucou for Windows and Linux — app wiring and the commands the island calls.
 
-// Only the tests use the agent loop until the chat commands switch to it.
-#[cfg_attr(not(test), allow(dead_code))]
 mod agent;
 mod claude;
 mod clock;
@@ -20,14 +18,14 @@ mod win_user;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::process::Command;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
-use claude::{Chat, ChatContext, ChatReply};
+use claude::{Chat, ChatContext};
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
@@ -315,23 +313,107 @@ fn approval_decline(app: AppHandle, request_id: String) {
 
 // ── Chat, files and secrets ───────────────────────────────────────────────────
 
-/// One chat turn. The API key and any file bytes stay on the Rust side.
+/// The chat turn in flight, if any: one at a time, cancellable from the island.
+#[derive(Default)]
+pub struct AgentRuntime {
+    current: Mutex<Option<agent::cancel::Cancel>>,
+    next_turn: AtomicU64,
+}
+
+impl AgentRuntime {
+    fn start(&self) -> Result<(u64, agent::cancel::Cancel), String> {
+        let mut current = self.current.lock().unwrap();
+        if current.is_some() {
+            return Err("Mochi is still working on the last one.".into());
+        }
+        let cancel = agent::cancel::Cancel::new();
+        *current = Some(cancel.clone());
+        Ok((self.next_turn.fetch_add(1, Ordering::SeqCst) + 1, cancel))
+    }
+
+    fn finish(&self) {
+        self.current.lock().unwrap().take();
+    }
+
+    fn cancel_current(&self) {
+        if let Some(cancel) = self.current.lock().unwrap().as_ref() {
+            cancel.cancel();
+        }
+    }
+}
+
+/// Clears the running turn however `agent_send` returns.
+struct TurnGuard<'a>(&'a AgentRuntime);
+
+impl Drop for TurnGuard<'_> {
+    fn drop(&mut self) {
+        self.0.finish();
+    }
+}
+
+/// Progress of a turn goes to the island as "agent-event".
+struct TauriSink(AppHandle);
+
+impl agent::events::EventSink for TauriSink {
+    fn emit(&self, event: agent::events::AgentEvent) {
+        let _ = self.0.emit_to(island::WINDOW_LABEL, "agent-event", event);
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentReply {
+    text: String,
+    cancelled: bool,
+    stopped: Option<String>,
+}
+
+/// One chat turn, with tools. The API key and any file bytes stay on the Rust
+/// side; the final text comes back here, progress goes out as events.
 #[tauri::command]
-async fn chat_send(
+async fn agent_send(
+    app: AppHandle,
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
+    runtime: State<'_, AgentRuntime>,
     query: String,
     context: Option<ChatContext>,
-) -> Result<ChatReply, String> {
+) -> Result<AgentReply, String> {
     let (provider, model) = {
         let settings = shared.settings.lock().unwrap();
         (claude::Provider::from_settings(&settings), settings.model.clone())
     };
-    claude::send(&chat, &provider, &model, query, context).await
+    let key = claude::api_key(&provider)?;
+    let (turn_id, cancel) = runtime.start()?;
+    let _guard = TurnGuard(&runtime);
+    let (epoch, history) = chat.begin();
+    let user_message = claude::user_message(history.is_empty(), &provider, query, context)?;
+
+    let cfg = agent::AgentConfig::for_provider(&provider);
+    let transport = agent::transport::HttpTransport::new(provider.clone(), key);
+    let tools = agent::tools::Registry::read_only(vec![hooks::home()]);
+    let input = agent::TurnInput { turn_id, provider, model, history, user_message };
+    let result = agent::run_turn(input, &cfg, &transport, &tools, &TauriSink(app.clone()), &cancel).await;
+
+    if let Some(messages) = result.messages {
+        chat.commit(epoch, messages);
+    }
+    match result.outcome {
+        agent::TurnOutcome::Done { text, stopped, .. } => Ok(AgentReply { text, cancelled: false, stopped }),
+        agent::TurnOutcome::Cancelled => Ok(AgentReply { text: String::new(), cancelled: true, stopped: None }),
+        agent::TurnOutcome::Failed(message) => Err(message),
+    }
+}
+
+/// The island's Stop button.
+#[tauri::command]
+fn agent_cancel(runtime: State<AgentRuntime>) {
+    runtime.cancel_current();
 }
 
 #[tauri::command]
-fn chat_reset(chat: State<Chat>) {
+fn chat_reset(chat: State<Chat>, runtime: State<AgentRuntime>) {
+    runtime.cancel_current();
     chat.reset();
 }
 
@@ -458,6 +540,7 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Chat::default())
+        .manage(AgentRuntime::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -475,7 +558,8 @@ pub fn run() {
             approval_ack,
             approval_decline,
             log_line,
-            chat_send,
+            agent_send,
+            agent_cancel,
             chat_reset,
             ingest_file,
             secret_present,

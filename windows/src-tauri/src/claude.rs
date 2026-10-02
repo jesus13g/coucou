@@ -1,6 +1,7 @@
-// Chat client: multi-turn chat with web search, and files sent as
-// document/image/text blocks — against the Claude API, or against a local model
-// (llama-server) that speaks the same Messages API without tools or vision.
+// Chat client: request building, files sent as document/image/text blocks and
+// the HTTP call — against the Claude API (with web search), or against a local
+// model (llama-server) that speaks the same Messages API without vision. The
+// turn loop with local tools lives in `agent`.
 //
 // Everything happens here rather than in the island: the API key never leaves
 // the Credential Manager, and file bytes never cross the IPC boundary.
@@ -9,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::secrets;
@@ -40,14 +41,17 @@ pub(crate) const LOCAL_CONTEXT_CHARS: usize =
 
 const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
 You have web search access and can help with absolutely anything — research, coding, finding places, recommendations, tasks, questions. \
+You also have tools to read files and list folders in the user's home folder, and to open a web page by its exact URL. \
+Use them when they help, and never invent what a file or page says. \
 Respond in the user's language. Be thorough and complete — use as much detail as the task requires. \
 No markdown formatting (no **, no ##, no bullet dashes). Use plain text with line breaks.";
 
 /// Same persona without the web search claim — told it can search, a local
 /// model makes searches up.
 const LOCAL_SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
-You run locally on the user's computer and have no internet access: never claim to have searched or browsed. \
-If something needs current information, say so. Help with coding, questions, writing and tasks. \
+You run locally on the user's computer. You cannot search the web: never claim to have searched. \
+You do have tools to read files and list folders in the user's home folder, and to open a web page when you know its exact URL; \
+use them when they help, and never invent what a file or page says. Help with coding, questions, writing and tasks. \
 Respond in the user's language. Be thorough and complete — use as much detail as the task requires. \
 No markdown formatting (no **, no ##, no bullet dashes). Use plain text with line breaks.";
 
@@ -85,7 +89,6 @@ impl Chat {
     }
 
     /// The history a new turn starts from, and the epoch to commit it against.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn begin(&self) -> (u64, Vec<Value>) {
         let messages = self.messages.lock().unwrap();
         (self.epoch.load(Ordering::SeqCst), messages.clone())
@@ -93,7 +96,6 @@ impl Chat {
 
     /// Replaces the history with the one a finished turn built, unless the chat
     /// was reset in the meantime. Returns whether it was written.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn commit(&self, epoch: u64, new_messages: Vec<Value>) -> bool {
         let mut messages = self.messages.lock().unwrap();
         if self.epoch.load(Ordering::SeqCst) != epoch {
@@ -102,22 +104,6 @@ impl Chat {
         *messages = new_messages;
         true
     }
-
-    fn is_empty(&self) -> bool {
-        self.messages.lock().unwrap().is_empty()
-    }
-
-    fn push(&self, message: Value) {
-        self.messages.lock().unwrap().push(message);
-    }
-
-    fn pop(&self) {
-        self.messages.lock().unwrap().pop();
-    }
-
-    fn snapshot(&self) -> Vec<Value> {
-        self.messages.lock().unwrap().clone()
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -125,81 +111,6 @@ impl Chat {
 pub enum ChatContext {
     File { name: String, path: String },
     Window { app_name: String, title: String, url: Option<String> },
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatReply {
-    pub text: String,
-}
-
-/// One chat turn. Returns the assistant's text, or a message the island shows
-/// in the note view.
-pub async fn send(
-    chat: &Chat,
-    provider: &Provider,
-    model: &str,
-    query: String,
-    context: Option<ChatContext>,
-) -> Result<ChatReply, String> {
-    let key = api_key(provider)?;
-    let user = user_message(chat.is_empty(), provider, query, context)?;
-    chat.push(user);
-
-    let messages = match provider {
-        Provider::Anthropic => chat.snapshot(),
-        // The full history stays in `chat`; only what is sent gets trimmed.
-        Provider::Local { .. } => match trim_for_budget(&chat.snapshot(), LOCAL_CONTEXT_CHARS) {
-            Ok(m) => m,
-            Err(err) => {
-                chat.pop();
-                return Err(err);
-            }
-        },
-    };
-    let body = request_body(provider, model, messages, &[]);
-
-    let response = match call(provider, key.as_deref(), &body).await {
-        Ok(v) => v,
-        Err(err) => {
-            chat.pop(); // keep the history consistent with what the model saw
-            return Err(err.message);
-        }
-    };
-
-    // A policy decline comes back as HTTP 200 with stop_reason "refusal".
-    if response.get("stop_reason").and_then(Value::as_str) == Some("refusal") {
-        chat.pop();
-        let why = response
-            .get("stop_details")
-            .and_then(|d| d.get("explanation"))
-            .and_then(Value::as_str)
-            .unwrap_or("Claude declined this one.");
-        return Err(why.to_string());
-    }
-
-    let Some(blocks) = response.get("content").and_then(Value::as_array).cloned() else {
-        chat.pop();
-        return Err("Unexpected API response.".into());
-    };
-
-    // Store the whole content — tool_use / tool_result blocks included — so the
-    // next turn has the right context.
-    chat.push(json!({ "role": "assistant", "content": blocks.clone() }));
-
-    let text = blocks
-        .iter()
-        .filter(|b| b.get("type").and_then(Value::as_str) == Some("text"))
-        .filter_map(|b| b.get("text").and_then(Value::as_str))
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string();
-
-    if text.is_empty() {
-        return Err("No response text.".into());
-    }
-    Ok(ChatReply { text })
 }
 
 /// The key for this provider: required for Anthropic, optional for a local
