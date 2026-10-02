@@ -9,6 +9,7 @@ use serde_json::{json, Map, Value};
 
 pub mod list_dir;
 pub mod read_file;
+pub mod web_fetch;
 
 use super::cancel::Cancel;
 use super::transport::BoxFuture;
@@ -87,6 +88,7 @@ impl Registry {
         Registry::new(vec![
             Box::new(read_file::ReadFile::new(roots.clone())),
             Box::new(list_dir::ListDir::new(roots)),
+            Box::new(web_fetch::WebFetch),
         ])
     }
 
@@ -289,7 +291,7 @@ pub(crate) mod tests {
         assert!(registry.get("nope").is_none());
 
         let registry = Registry::read_only(vec![std::env::temp_dir()]);
-        assert_eq!(registry.names(), vec!["read_file", "list_dir"]);
+        assert_eq!(registry.names(), vec!["read_file", "list_dir", "web_fetch"]);
     }
 
     #[test]
