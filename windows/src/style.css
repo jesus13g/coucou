@@ -821,6 +821,43 @@ input[type="range"]::-webkit-slider-thumb {
   user-select: text;
 }
 
+/* Tool calls of the turn in flight: the prototype's plain .chip, without the
+   context chip's border and settle animation. */
+.chat-row.tools {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip.tool {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #b9bdc4;
+  border-color: transparent;
+  transform: none;
+  transition: none;
+}
+
+.chip.tool .chip-dot {
+  background: #b9bdc4;
+}
+
+.chip.tool.running .chip-dot {
+  animation: typing 0.9s ease-in-out infinite;
+}
+
+.chip.tool.ok {
+  opacity: 0.7;
+}
+
+.chip.tool.error .chip-dot {
+  background: #f4505e;
+}
+
+.reply.interim {
+  opacity: 0.6;
+}
+
 .typing {
   display: flex;
   gap: 4px;

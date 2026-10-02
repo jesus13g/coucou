@@ -28,6 +28,14 @@ export interface ApprovalInfo {
   command: string;
 }
 
+/** One tool call of the chat turn in flight, shown as a chip. */
+export interface AgentStep {
+  id: string;
+  name: string;
+  summary: string;
+  status: "running" | "ok" | "error";
+}
+
 export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
@@ -141,6 +149,11 @@ class AppState {
   noteMessage: string | null = null;
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
+  /** A chat turn is in flight; the fields below describe it. */
+  agentBusy = false;
+  agentTurnId: number | null = null;
+  agentSteps: AgentStep[] = [];
+  agentInterim: string | null = null;
   pendingApproval: ApprovalInfo | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};

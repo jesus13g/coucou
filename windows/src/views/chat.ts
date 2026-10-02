@@ -4,7 +4,7 @@ import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { Bridge, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State, type ChatMessage } from "../core/state";
+import { State, type AgentStep, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
 
 let nextId = 1;
@@ -25,6 +25,32 @@ function typingDots(): HTMLElement {
     "div",
     { class: "chat-row" },
     h("div", { class: "typing" }, h("i"), h("i"), h("i")),
+  );
+}
+
+const STEP_LABEL_MAX = 32;
+
+function stepLabel(step: AgentStep): string {
+  const label =
+    step.name === "read_file"
+      ? `Reading ${step.summary}`
+      : step.name === "list_dir"
+        ? `Looking in ${step.summary}`
+        : step.name === "web_fetch"
+          ? `Opening ${step.summary}`
+          : step.name === "web_search"
+            ? `Searching “${step.summary}”`
+            : step.name;
+  return label.length > STEP_LABEL_MAX ? `${label.slice(0, STEP_LABEL_MAX - 1)}…` : label;
+}
+
+/** A tool call of the turn in flight — the prototype's plain grey chip. */
+function toolChip(step: AgentStep): HTMLElement {
+  return h(
+    "div",
+    { class: `chip tool ${step.status}`, title: step.summary },
+    h("i", { class: "chip-dot" }),
+    h("span", { text: stepLabel(step) }),
   );
 }
 
@@ -55,16 +81,27 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
 
   let sending = false;
-  let renderedCount = -1;
+  let renderedKey = "";
+  let buttonStop: boolean | null = null;
 
   async function submit() {
+    if (sending) {
+      // The send button is Stop while a turn runs.
+      void Bridge.agentCancel();
+      return;
+    }
     const query = input.value.trim();
-    if (!query || sending) return;
+    if (!query) return;
     input.value = "";
     sending = true;
     Sound.play("send");
 
-    State.chatHistory.push({ id: nextId++, role: "user", content: query });
+    const asked: ChatMessage = { id: nextId++, role: "user", content: query };
+    State.chatHistory.push(asked);
+    State.agentBusy = true;
+    State.agentSteps = [];
+    State.agentInterim = null;
+    State.agentTurnId = null;
     State.stateOverride = "thinking";
     State.notify();
     onHeightChange();
@@ -74,17 +111,26 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.chatHistory.length === 1 && file ? { kind: "file", name: file.name, path: file.path } : null;
 
     try {
-      const reply = await Bridge.chatSend(query, context);
-      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
-      State.stateOverride = null;
-      Sound.play("finish");
+      const reply = await Bridge.agentSend(query, context);
+      if (reply.cancelled) {
+        // Stopped: the turn was rolled back, so the question goes back to the field.
+        if (State.chatHistory[State.chatHistory.length - 1]?.id === asked.id) State.chatHistory.pop();
+        if (!input.value) input.value = query;
+      } else {
+        State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
+        Sound.play("finish");
+      }
     } catch (err) {
-      State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
       State.view = "note";
       Sound.play("error");
     } finally {
       sending = false;
+      State.agentBusy = false;
+      State.agentSteps = [];
+      State.agentInterim = null;
+      State.agentTurnId = null;
+      State.stateOverride = null;
       State.notify();
       onHeightChange();
       input.focus();
@@ -111,14 +157,29 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         if (wantChip) chipRow.append(contextChip(wantChip));
       }
 
-      const thinking = State.stateOverride === "thinking";
-      const count = State.chatHistory.length + (thinking ? 0.5 : 0);
-      if (count !== renderedCount) {
-        renderedCount = count;
+      const busy = State.agentBusy;
+      const steps = State.agentSteps;
+      const interim = State.agentInterim;
+      const key = `${State.chatHistory.length}|${busy}|${steps.map((s) => s.id + s.status).join(",")}|${interim ?? ""}`;
+      if (key !== renderedKey) {
+        renderedKey = key;
         clear(log);
         for (const m of State.chatHistory) log.append(bubble(m));
-        if (thinking) log.append(typingDots());
+        if (busy) {
+          if (interim) log.append(h("div", { class: "chat-row" }, h("div", { class: "reply interim", text: interim })));
+          if (steps.length) log.append(h("div", { class: "chat-row tools" }, ...steps.map(toolChip)));
+          log.append(typingDots());
+        }
         log.scrollTop = log.scrollHeight;
+      }
+
+      // Swap the icon only when the mode changes, so the button isn't rebuilt
+      // under the pointer.
+      if (buttonStop !== sending) {
+        buttonStop = sending;
+        clear(send);
+        send.append(svg(sending ? ICONS.xmark : ICONS.arrowUp, 11));
+        send.title = sending ? "Stop" : "Send";
       }
 
       input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";

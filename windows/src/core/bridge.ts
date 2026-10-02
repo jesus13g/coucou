@@ -79,9 +79,14 @@ export const Bridge = {
   approvalDecline: (requestId: string) => call<void>("approval_decline", { requestId }),
 
   // ── Chat, files, secrets ──────────────────────────────────────────────────
-  /** One chat turn. The API key and any file bytes never leave Rust. */
-  chatSend: (query: string, context: ChatContext | null) =>
-    callOrThrow<{ text: string }>("chat_send", { query, context }),
+  /**
+   * One chat turn, tools included. The API key and any file bytes never leave
+   * Rust; progress arrives as "agent-event".
+   */
+  agentSend: (query: string, context: ChatContext | null) =>
+    callOrThrow<AgentReply>("agent_send", { query, context }),
+  /** The Stop button: cancels the turn in flight, if any. */
+  agentCancel: () => call<void>("agent_cancel"),
   chatReset: () => call<void>("chat_reset"),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),
@@ -102,6 +107,30 @@ export interface IntegrationUpdate {
   data: Record<string, unknown>;
   error: string | null;
 }
+
+export interface AgentReply {
+  text: string;
+  cancelled: boolean;
+  /** "max_steps" when the step cap ended the turn. */
+  stopped: string | null;
+}
+
+/** Progress of a chat turn. Summaries only — never file or page contents. */
+export type AgentEvent = { turnId: number } & (
+  | { type: "turn_start" }
+  | { type: "tool_start"; id: string; name: string; summary: string }
+  | { type: "tool_end"; id: string; ok: boolean; summary: string }
+  | { type: "text"; text: string }
+  | { type: "retry"; attempt: number; waitMs: number; reason: string }
+  | {
+      type: "done";
+      text: string;
+      usage: { inputTokens: number; outputTokens: number } | null;
+      stopped: string | null;
+    }
+  | { type: "cancelled" }
+  | { type: "error"; message: string }
+);
 
 export type ChatContext =
   | { kind: "file"; name: string; path: string }
