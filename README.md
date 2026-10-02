@@ -102,6 +102,7 @@ Click the Coucou icon in the system tray → **Settings…**
 |---|---|---|
 | **Claude Code hooks** | live sessions and approvals | **Install hooks** — Coucou backs up `~/.claude/settings.json`, merges its hooks and shows you the diff before writing anything |
 | **Anthropic API key** | chat and questions about files | Windows Credential Manager / Linux Secret Service |
+| Local model *(instead of the key above)* | the chat on your own machine — **Chat → Provider → Local model**, pointed at a llama-server; its API key is optional | Windows Credential Manager / Linux Secret Service |
 | GitHub, Notion, Cal.com | the integration pills | Windows Credential Manager / Linux Secret Service, all optional |
 
 If Coucou isn't running, the hook exits immediately: **Claude Code is never blocked.**

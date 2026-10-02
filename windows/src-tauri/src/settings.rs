@@ -29,6 +29,13 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    /// Who answers the chat: "anthropic" (the Claude API) or "local" (a
+    /// llama-server, or anything else speaking the Messages API).
+    #[serde(default = "default_provider")]
+    pub provider: String,
+    /// Messages endpoint used when the provider is "local".
+    #[serde(default = "default_local_endpoint")]
+    pub local_endpoint: String,
 }
 
 fn default_island_position() -> String {
@@ -37,6 +44,14 @@ fn default_island_position() -> String {
 
 fn default_model() -> String {
     crate::claude::DEFAULT_MODEL.to_string()
+}
+
+fn default_provider() -> String {
+    "anthropic".into()
+}
+
+fn default_local_endpoint() -> String {
+    crate::claude::DEFAULT_LOCAL_ENDPOINT.to_string()
 }
 
 impl Default for Settings {
@@ -53,6 +68,8 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            provider: default_provider(),
+            local_endpoint: default_local_endpoint(),
         }
     }
 }
@@ -138,4 +155,18 @@ pub fn save(settings: &Settings) -> std::io::Result<()> {
     let json = serde_json::to_vec_pretty(settings)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::write(settings_path(), json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_settings_default_to_the_claude_api() {
+        let old = r#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,
+            "activeIntegrations":[],"screen":"primary","autostart":false,"hooksInstalled":false,"model":"claude-opus-5"}"#;
+        let settings: Settings = serde_json::from_str(old).unwrap();
+        assert_eq!(settings.provider, "anthropic");
+        assert_eq!(settings.local_endpoint, crate::claude::DEFAULT_LOCAL_ENDPOINT);
+    }
 }

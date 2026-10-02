@@ -33,7 +33,7 @@ use settings::Settings;
 
 /// Keeps spawned helpers from flashing a console window.
 #[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Spawns a helper without a console window (Windows) and without holding on to
 /// it: the child is reaped by a throwaway thread so no zombie is left behind on
@@ -320,8 +320,11 @@ async fn chat_send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    let (provider, model) = {
+        let settings = shared.settings.lock().unwrap();
+        (claude::Provider::from_settings(&settings), settings.model.clone())
+    };
+    claude::send(&chat, &provider, &model, query, context).await
 }
 
 #[tauri::command]

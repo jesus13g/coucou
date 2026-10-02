@@ -91,6 +91,10 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  /** Who answers the chat: the Claude API or a local llama-server. */
+  provider: "anthropic" | "local";
+  /** Messages endpoint used when the provider is "local". */
+  localEndpoint: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -105,6 +109,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  provider: "anthropic",
+  localEndpoint: "http://127.0.0.1:8080/v1/messages",
 };
 
 type Listener = () => void;
