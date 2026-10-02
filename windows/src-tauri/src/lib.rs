@@ -1,5 +1,8 @@
 // Coucou for Windows and Linux — app wiring and the commands the island calls.
 
+// Only the tests use the agent loop until the chat commands switch to it.
+#[cfg_attr(not(test), allow(dead_code))]
+mod agent;
 mod claude;
 mod clock;
 mod files;
